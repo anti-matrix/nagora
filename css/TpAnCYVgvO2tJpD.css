@@ -277,6 +277,11 @@ body {
   border: 1px solid #444;
 }
 
+.dm-bubble.media {
+  width: clamp(180px, 55%, 320px);
+  padding: 6px;
+}
+
 .dm-meta {
   font-size: 0.7rem;
   color: #888;

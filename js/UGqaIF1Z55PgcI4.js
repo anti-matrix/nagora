@@ -116,7 +116,7 @@ function renderMessages(messages) {
   dmMessages.innerHTML = "";
   for (const m of messages) {
     const bubble = document.createElement("div");
-    bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}`;
+    bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}${m.mediaType ? " media" : ""}`;
 
     if (m.mediaType) {
       const img = document.createElement("img");
