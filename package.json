@@ -12,7 +12,8 @@
   "license": "ISC",
   "dependencies": {
     "@upstash/redis": "^1.37.0",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "sharp": "^0.33.0"
   },
   "engines": {
     "node": ">=18"

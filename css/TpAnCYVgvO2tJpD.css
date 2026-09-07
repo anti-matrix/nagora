@@ -370,3 +370,20 @@ body {
 .dm-attach-menu button:disabled {
   cursor: not-allowed;
 }
+
+.dm-bubble img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.dm-attach-menu button:not(:disabled) {
+  color: #fff;
+  cursor: pointer;
+}
+
+.dm-attach-menu button:not(:disabled):hover {
+  background: #222;
+}

@@ -16,6 +16,8 @@ const dmInput = document.getElementById("dm-input");
 const dmSend = document.getElementById("dm-send");
 const dmAttach = document.getElementById("dm-attach");
 const dmAttachMenu = document.getElementById("dm-attach-menu");
+const dmImageInput = document.getElementById("dm-image-input");
+const dmImageBtn = document.getElementById("dm-image-btn");
 
 async function initSession() {
   try {
@@ -113,8 +115,18 @@ function renderMessages(messages) {
     const bubble = document.createElement("div");
     bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}`;
 
-    const text = document.createElement("div");
-    text.textContent = m.content;
+    if (m.mediaType) {
+      const img = document.createElement("img");
+      img.src = `/api/file?id=${encodeURIComponent(m.id)}`;
+      img.alt = "Imagem";
+      bubble.appendChild(img);
+    }
+
+    if (m.content) {
+      const text = document.createElement("div");
+      text.textContent = m.content;
+      bubble.appendChild(text);
+    }
 
     const meta = document.createElement("div");
     meta.className = "dm-meta";
@@ -123,11 +135,58 @@ function renderMessages(messages) {
       minute: "2-digit",
     });
 
-    bubble.appendChild(text);
     bubble.appendChild(meta);
     dmMessages.appendChild(bubble);
   }
   dmMessages.scrollTop = dmMessages.scrollHeight;
+}
+
+function showImageError(msg) {
+  dmTyping.textContent = msg;
+  setTimeout(() => {
+    if (dmTyping.textContent === msg) dmTyping.textContent = "";
+  }, 3000);
+}
+
+function downscaleImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 1600;
+      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = dataUrl.split(",")[1];
+      resolve(base64);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    img.src = url;
+  });
+}
+
+async function uploadImageBase64(imageBase64) {
+  const r = await fetch("/api/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      recipientUserId: selectedUser.userId,
+      imageBase64,
+    }),
+  });
+  if (!r.ok) throw new Error("upload failed");
+  await pollConversation();
 }
 
 async function pollConversation() {
@@ -241,6 +300,30 @@ dmInput.addEventListener("input", async () => {
 
 dmAttach.addEventListener("click", () => {
   dmAttachMenu.classList.toggle("open");
+});
+
+dmImageBtn.addEventListener("click", () => {
+  dmImageInput.click();
+  dmAttachMenu.classList.remove("open");
+});
+
+dmImageInput.addEventListener("change", async () => {
+  const file = dmImageInput.files?.[0];
+  dmImageInput.value = ""; // allow re-selecting the same file
+  if (!file || !selectedUser) return;
+
+  if (!file.type.startsWith("image/")) {
+    showImageError("Apenas imagens são permitidas.");
+    return;
+  }
+
+  try {
+    const base64 = await downscaleImage(file);
+    await uploadImageBase64(base64);
+  } catch (e) {
+    console.warn("[app] image upload pipeline:", e);
+    showImageError("Falha ao enviar imagem.");
+  }
 });
 
 async function heartbeat() {

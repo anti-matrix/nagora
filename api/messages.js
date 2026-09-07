@@ -15,6 +15,9 @@ function toCamelMessage(row) {
     content: row.content,
     createdAt: row.created_at,
     readAt: row.read_at,
+    mediaType: row.media_type || null,
+    mediaWidth: row.media_width || null,
+    mediaHeight: row.media_height || null,
   };
 }
 
@@ -44,7 +47,8 @@ async function getHistory(req, res) {
   const them = withUserId;
 
   const { rows } = await query(
-    `SELECT id, sender_id, recipient_id, content, created_at, read_at
+    `SELECT id, sender_id, recipient_id, content, created_at, read_at,
+            media_type, media_width, media_height
      FROM messages
      WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
        AND ($3::int IS NULL OR id < $3)
@@ -81,7 +85,7 @@ async function sendMessage(req, res) {
   }
 
   const { rows } = await query(
-    "INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3) RETURNING id, sender_id, recipient_id, content, created_at",
+    "INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3) RETURNING id, sender_id, recipient_id, content, created_at, media_type, media_width, media_height",
     [req.account.user_id, recipientUserId, text]
   );
 
