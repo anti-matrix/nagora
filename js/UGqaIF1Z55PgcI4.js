@@ -18,6 +18,9 @@ const dmAttach = document.getElementById("dm-attach");
 const dmAttachMenu = document.getElementById("dm-attach-menu");
 const dmImageInput = document.getElementById("dm-image-input");
 const dmImageBtn = document.getElementById("dm-image-btn");
+const dmLightbox = document.getElementById("dm-lightbox");
+const dmLightboxImg = document.getElementById("dm-lightbox-img");
+const dmLightboxClose = document.getElementById("dm-lightbox-close");
 
 async function initSession() {
   try {
@@ -146,6 +149,17 @@ function showImageError(msg) {
   setTimeout(() => {
     if (dmTyping.textContent === msg) dmTyping.textContent = "";
   }, 3000);
+}
+
+function openLightbox(src) {
+  dmLightboxImg.src = src;
+  dmLightbox.hidden = false;
+  dmLightboxClose.focus();
+}
+
+function closeLightbox() {
+  dmLightbox.hidden = true;
+  dmLightboxImg.src = "";
 }
 
 function downscaleImage(file) {
@@ -323,6 +337,50 @@ dmImageInput.addEventListener("change", async () => {
   } catch (e) {
     console.warn("[app] image upload pipeline:", e);
     showImageError("Falha ao enviar imagem.");
+  }
+});
+
+// Open lightbox when any image inside a bubble is clicked.
+dmMessages.addEventListener("click", (e) => {
+  const img = e.target.closest(".dm-bubble img");
+  if (!img) return;
+  openLightbox(img.src);
+});
+
+// Close lightbox on backdrop click or close button.
+dmLightbox.addEventListener("click", (e) => {
+  if (e.target === dmLightbox || e.target.closest(".dm-lightbox-close")) {
+    closeLightbox();
+  }
+});
+
+// Close lightbox with Esc.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !dmLightbox.hidden) {
+    e.preventDefault();
+    closeLightbox();
+  }
+});
+
+// Focus the message list when the user clicks inside the DM panel but outside interactive controls.
+dmPanel.addEventListener("click", (e) => {
+  if (
+    e.target.closest("#dm-input") ||
+    e.target.closest("button") ||
+    e.target.closest("input")
+  ) {
+    return;
+  }
+  dmMessages.focus({ preventScroll: true });
+});
+
+// Smooth line-by-line scrolling with Up/Down arrows when the message list has focus.
+dmMessages.addEventListener("keydown", (e) => {
+  if (e.target !== dmMessages) return;
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    e.preventDefault();
+    const delta = e.key === "ArrowUp" ? -48 : 48;
+    dmMessages.scrollBy({ top: delta, behavior: "smooth" });
   }
 });
 
