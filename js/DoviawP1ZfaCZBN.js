@@ -7,6 +7,11 @@ function getCookie(name) {
   return match ? match[1] : null;
 }
 
+function setCookie(name, value, days) {
+  const maxAge = days * 24 * 60 * 60;
+  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; path=/; SameSite=Lax`;
+}
+
 const tabLogin  = document.getElementById("tab-login");
 const tabSignup = document.getElementById("tab-signup");
 const form      = document.getElementById("auth-form");
@@ -16,14 +21,8 @@ const confirmGroup = document.getElementById("confirm-group");
 const confirmPassword = document.getElementById("confirm-password");
 const submitBtn = document.getElementById("submit-btn");
 const message   = document.getElementById("message");
-const apiKeySection = document.getElementById("apikey-section");
-const getKeyBtn = document.getElementById("get-key-btn");
-const apiKeyReveal = document.getElementById("apikey-reveal");
-const apiKeyInput = document.getElementById("apikey");
-const copyKeyBtn = document.getElementById("copy-key-btn");
 
 let mode = "login";
-let savedApiKey = "";
 
 function setMode(next) {
   mode = next;
@@ -91,6 +90,7 @@ form.addEventListener("submit", async (e) => {
     const r = await fetch("/api/account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(body),
     });
 
@@ -113,35 +113,26 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
-    // login success
-    savedApiKey = data.apiKey;
-    localStorage.setItem("nagora_api_key", savedApiKey);
     if (data.userId) {
-      const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
-      document.cookie = `userId=${data.userId}; expires=${expires}; path=/; SameSite=Lax`;
+      setCookie("userId", data.userId, 365);
     }
-    message.textContent = `Bem-vindo, ${data.username}!`;
-    message.classList.remove("text-danger");
-    message.classList.add("text-success");
-    apiKeySection.classList.remove("hidden-field");
+    location.href = "app.html";
   } catch (e) {
     message.textContent = "Falha na conexão com o servidor.";
     message.classList.add("text-danger");
   }
 });
 
-getKeyBtn.addEventListener("click", () => {
-  apiKeyInput.value = savedApiKey;
-  apiKeyReveal.classList.remove("hidden-field");
-});
-
-copyKeyBtn.addEventListener("click", async () => {
+(async function checkSession() {
   try {
-    await navigator.clipboard.writeText(apiKeyInput.value);
-    copyKeyBtn.textContent = "Copiado!";
-    setTimeout(() => (copyKeyBtn.textContent = "Copiar"), 1500);
+    const r = await fetch("/api/me", { credentials: "include" });
+    if (r.ok) {
+      const data = await r.json();
+      if (data.ok) {
+        location.href = "app.html";
+      }
+    }
   } catch {
-    apiKeyInput.select();
-    document.execCommand("copy");
+    // ignore, stay on login page
   }
-});
+})();

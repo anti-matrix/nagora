@@ -20,12 +20,25 @@
             <div class="user-list" id="user-list"></div>
         </aside>
         <main class="main">
-            <div class="dm-placeholder" id="dm-placeholder">Selecione um usuário para ver o perfil</div>
+            <div class="dm-placeholder" id="dm-placeholder">Selecione um usuário para conversar</div>
             <div class="dm-panel" id="dm-panel" hidden>
-                <h4 id="dm-username"></h4>
-                <p class="text-muted" id="dm-userid"></p>
-                <div class="input-group mt-4">
-                    <input type="text" class="form-control" placeholder="Mensagens em breve" disabled/>
+                <div class="dm-header">
+                    <span class="status-dot offline" id="dm-status" aria-hidden="true"></span>
+                    <h4 id="dm-username"></h4>
+                </div>
+                <div class="dm-typing" id="dm-typing"></div>
+                <div class="dm-messages" id="dm-messages"></div>
+                <div class="dm-composer">
+                    <div class="dm-attach-wrap">
+                        <button type="button" class="dm-attach-btn" id="dm-attach" aria-label="Anexo"><i class="bi bi-paperclip"></i></button>
+                        <div class="dm-attach-menu hidden-field" id="dm-attach-menu">
+                            <button type="button" disabled title="em breve"><i class="bi bi-image"></i> Imagem</button>
+                            <button type="button" disabled title="em breve"><i class="bi bi-camera-video"></i> Vídeo</button>
+                        </div>
+                    </div>
+                    <textarea class="dm-input" id="dm-input" rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+                    <button type="button" class="dm-audio-btn" id="dm-audio" disabled title="Áudio em breve" aria-label="Áudio"><i class="bi bi-mic"></i></button>
+                    <button type="button" class="dm-send-btn" id="dm-send" aria-label="Enviar"><i class="bi bi-send"></i></button>
                 </div>
             </div>
         </main>

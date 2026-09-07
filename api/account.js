@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { query, ensureSchema } from "../lib/db.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { generateApiKey } from "../lib/apikey.js";
 import { kv, userKey, USERIDS } from "../lib/redis.js";
+import { parseCookies, serializeCookie, isSecureRequest } from "../lib/cookie.js";
 
 const USERNAME_RE = /^[^\s]{5,15}$/;
 const HAS_LETTER  = /[A-Za-z]/;
@@ -22,6 +24,24 @@ async function linkAccount(userId, username) {
     });
     await kv.sadd(USERIDS, userId);
   }
+}
+
+function makeAuthCookies(req, apiKey, userId) {
+  const secure = isSecureRequest(req);
+  const sessionCookie = serializeCookie("nagora_session", apiKey, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "Lax",
+    maxAge: 2592000,
+    secure,
+  });
+  const userIdCookie = serializeCookie("userId", userId, {
+    path: "/",
+    sameSite: "Lax",
+    maxAge: 31536000,
+    secure,
+  });
+  return [sessionCookie, userIdCookie];
 }
 
 async function signup(req, res, { username, password, confirmPassword, userId }) {
@@ -56,7 +76,20 @@ async function signup(req, res, { username, password, confirmPassword, userId })
       [username, passHash, userId || null, apiKey]
     );
     await linkAccount(userId, username);
-    res.status(201).json({ ok: true, username: rows[0].username, userId: rows[0].user_id });
+
+    const insertedUserId = rows[0].user_id;
+    if (insertedUserId) {
+      const secure = isSecureRequest(req);
+      const userIdCookie = serializeCookie("userId", insertedUserId, {
+        path: "/",
+        sameSite: "Lax",
+        maxAge: 31536000,
+        secure,
+      });
+      res.setHeader("Set-Cookie", userIdCookie);
+    }
+
+    res.status(201).json({ ok: true, username: rows[0].username, userId: insertedUserId });
   } catch (err) {
     if (err.code === "23505") {
       res.status(409).json({ error: "Username already taken" });
@@ -88,14 +121,37 @@ async function login(req, res, { username, password }) {
     return;
   }
 
+  let userId = row.user_id;
+  if (!userId) {
+    const cookieUserId = parseCookies(req)["userId"];
+    if (cookieUserId) {
+      try {
+        await query("UPDATE accounts SET user_id = $1 WHERE username = $2", [cookieUserId, username]);
+        userId = cookieUserId;
+      } catch (err) {
+        if (err.code === "23505") {
+          userId = randomUUID();
+          await query("UPDATE accounts SET user_id = $1 WHERE username = $2", [userId, username]);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      userId = randomUUID();
+      await query("UPDATE accounts SET user_id = $1 WHERE username = $2", [userId, username]);
+    }
+  }
+
   let apiKey = row.api_key;
   if (!apiKey) {
-    apiKey = generateApiKey(row.username, row.user_id);
+    apiKey = generateApiKey(username, userId);
     await query("UPDATE accounts SET api_key = $1 WHERE username = $2", [apiKey, username]);
   }
 
   await query("UPDATE accounts SET last_login_at = now() WHERE username = $1", [username]);
-  res.status(200).json({ ok: true, username: row.username, userId: row.user_id, apiKey });
+
+  res.setHeader("Set-Cookie", makeAuthCookies(req, apiKey, userId));
+  res.status(200).json({ ok: true, username: row.username, userId });
 }
 
 export default async function handler(req, res) {
