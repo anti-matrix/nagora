@@ -240,7 +240,7 @@ dmInput.addEventListener("input", async () => {
 });
 
 dmAttach.addEventListener("click", () => {
-  dmAttachMenu.classList.toggle("hidden-field");
+  dmAttachMenu.classList.toggle("open");
 });
 
 async function heartbeat() {

@@ -345,13 +345,17 @@ body {
   position: absolute;
   bottom: 52px;
   left: 0;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 4px;
   background: #1a1a1a;
   border: 1px solid #333;
   padding: 6px;
   min-width: 120px;
+}
+
+.dm-attach-menu.open {
+  display: flex;
 }
 
 .dm-attach-menu button {
