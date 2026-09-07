@@ -1,0 +1,13 @@
+# Local secrets — never commit these
+.env
+*.local
+
+# Dependencies
+node_modules/
+
+# Python caches (may contain compiled secrets)
+__pycache__/
+*.pyc
+
+# opencode project memory — local only, never commit
+.opencode/

@@ -1,0 +1,11 @@
+{
+  "trailingSlash": false,
+  "functions": {
+    "api/shell.js": {
+      "maxDuration": 30
+    },
+    "api/logs.js": {
+      "maxDuration": 30
+    }
+  }
+}
