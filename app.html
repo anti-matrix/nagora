@@ -15,7 +15,7 @@
 </head>
 <body class="app-body">
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">USUÁRIOS</div>
             <div class="user-list" id="user-list"></div>
         </aside>
@@ -23,10 +23,20 @@
             <div class="dm-placeholder" id="dm-placeholder">Selecione um usuário para conversar</div>
             <div class="dm-panel" id="dm-panel" hidden>
                 <div class="dm-header">
+                    <button type="button" class="dm-menu-btn" id="dm-menu-btn" aria-label="Abrir lista de usuários" aria-expanded="false" aria-controls="sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
                     <span class="status-dot offline" id="dm-status" aria-hidden="true"></span>
                     <h4 id="dm-username"></h4>
                 </div>
                 <div class="dm-typing" id="dm-typing"></div>
+                <div class="dm-reply-bar" id="dm-reply-bar" hidden>
+                    <div class="dm-reply-info">
+                        <span class="dm-reply-label">Respondendo a <strong id="dm-reply-name"></strong></span>
+                        <span class="dm-reply-snippet" id="dm-reply-snippet"></span>
+                    </div>
+                    <button type="button" class="dm-reply-cancel" id="dm-reply-cancel" aria-label="Cancelar resposta"><i class="bi bi-x"></i></button>
+                </div>
                 <div class="dm-messages" id="dm-messages" tabindex="-1"></div>
                 <div class="dm-composer">
                     <input type="file" id="dm-image-input" accept="image/*" hidden />
@@ -44,6 +54,8 @@
             </div>
         </main>
     </div>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
 
     <div id="dm-lightbox" class="dm-lightbox" hidden>
       <button type="button" class="dm-lightbox-close" id="dm-lightbox-close" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>

@@ -124,6 +124,7 @@ body {
 /* App layout */
 .app-body {
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     margin: 0;
 }
@@ -131,6 +132,7 @@ body {
 .app-shell {
     display: flex;
     height: 100vh;
+    height: 100dvh;
 }
 
 .sidebar {
@@ -469,6 +471,186 @@ body {
 }
 
 .dm-messages:focus-visible {
-  outline: 1px solid #888;
-  outline-offset: -1px;
+    outline: 1px solid #888;
+    outline-offset: -1px;
+}
+
+.dm-menu-btn {
+    display: none;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid #444;
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dm-reply-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+    margin-top: 4px;
+}
+
+.dm-reply-bar[hidden] {
+    display: none !important;
+}
+
+.dm-reply-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dm-reply-label {
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+.dm-reply-label strong {
+    color: #fff;
+}
+
+.dm-reply-snippet {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dm-reply-cancel {
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dm-reply-cancel:hover {
+    color: #fff;
+}
+
+.dm-bubble {
+    position: relative;
+}
+
+.dm-reply-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.dm-bubble:hover .dm-reply-btn {
+    opacity: 1;
+}
+
+@media (pointer: coarse) {
+    .dm-reply-btn {
+        opacity: 0.6;
+    }
+}
+
+.dm-quote {
+    border-left: 2px solid #888;
+    padding-left: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.dm-quote:hover {
+    opacity: 1;
+}
+
+.dm-quote-name {
+    font-size: 0.75rem;
+    color: #aaa;
+    font-weight: 600;
+}
+
+.dm-quote-text {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dm-bubble-highlight {
+    animation: dm-bubble-pulse 1.5s ease;
+}
+
+@keyframes dm-bubble-pulse {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); }
+}
+
+.dm-link {
+    color: #6cf;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.dm-link:hover {
+    color: #9df;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease-out;
+        z-index: 1000;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main {
+        width: 100%;
+    }
+
+    .dm-menu-btn {
+        display: flex;
+    }
+
+    .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 900;
+    }
+
+    .sidebar-overlay[hidden] {
+        display: none !important;
+    }
 }

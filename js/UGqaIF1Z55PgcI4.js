@@ -4,6 +4,8 @@ let pollInterval = null;
 let lastMessageId = null;
 let typingDebounceTimer = null;
 let lastTypingPost = 0;
+let replyingTo = null;
+let drawerOpen = false;
 
 const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
@@ -21,6 +23,40 @@ const dmImageBtn = document.getElementById("dm-image-btn");
 const dmLightbox = document.getElementById("dm-lightbox");
 const dmLightboxImg = document.getElementById("dm-lightbox-img");
 const dmLightboxClose = document.getElementById("dm-lightbox-close");
+
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+const menuBtn = document.getElementById("dm-menu-btn");
+const replyBar = document.getElementById("dm-reply-bar");
+const replyName = document.getElementById("dm-reply-name");
+const replySnippet = document.getElementById("dm-reply-snippet");
+const replyCancel = document.getElementById("dm-reply-cancel");
+
+const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+
+function appendLinkifiedText(text, parent) {
+  let lastIndex = 0;
+  let match;
+  while ((match = URL_RE.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index);
+    if (before) parent.appendChild(document.createTextNode(before));
+
+    let url = match[0].replace(/[.,;:!?]+$/, "");
+    if (url.endsWith(")")) url = url.slice(0, -1);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "dm-link";
+    a.textContent = url;
+    parent.appendChild(a);
+
+    lastIndex = match.index + match[0].length;
+  }
+  const tail = text.slice(lastIndex);
+  if (tail) parent.appendChild(document.createTextNode(tail));
+}
 
 async function initSession() {
   try {
@@ -97,7 +133,33 @@ function selectUser(user) {
 
   markRead(user.userId);
   startPoll();
+  closeDrawer();
 }
+
+function openDrawer() {
+  sidebar.classList.add("open");
+  sidebarOverlay.hidden = false;
+  menuBtn.setAttribute("aria-expanded", "true");
+  menuBtn.setAttribute("aria-label", "Fechar lista de usuários");
+  drawerOpen = true;
+  const activeRow = userList.querySelector(".user-row.active");
+  (activeRow || userList.querySelector(".user-row"))?.focus();
+}
+
+function closeDrawer() {
+  sidebar.classList.remove("open");
+  sidebarOverlay.hidden = true;
+  menuBtn.setAttribute("aria-expanded", "false");
+  menuBtn.setAttribute("aria-label", "Abrir lista de usuários");
+  drawerOpen = false;
+  menuBtn.focus();
+}
+
+menuBtn.addEventListener("click", () => {
+  if (drawerOpen) closeDrawer(); else openDrawer();
+});
+
+sidebarOverlay.addEventListener("click", closeDrawer);
 
 async function markRead(userId) {
   try {
@@ -112,11 +174,81 @@ async function markRead(userId) {
   }
 }
 
+function snippet(replyTo) {
+  if (replyTo.content) {
+    return replyTo.content.length > 80
+      ? replyTo.content.slice(0, 80) + "…"
+      : replyTo.content;
+  }
+  if (replyTo.mediaType?.startsWith("image/")) return "(imagem)";
+  return "(mídia)";
+}
+
+function setReply(message) {
+  const senderUsername =
+    message.senderId === me.userId ? me.username : selectedUser.username;
+  replyingTo = {
+    id: message.id,
+    senderId: message.senderId,
+    senderUsername,
+    content: message.content,
+    mediaType: message.mediaType,
+  };
+  renderReplyBar();
+  dmInput.focus();
+}
+
+function clearReply() {
+  replyingTo = null;
+  renderReplyBar();
+}
+
+function renderReplyBar() {
+  if (!replyingTo) {
+    replyBar.hidden = true;
+    return;
+  }
+  replyName.textContent = replyingTo.senderUsername;
+  replySnippet.textContent = snippet(replyingTo);
+  replyBar.hidden = false;
+}
+
+function jumpToMessage(id) {
+  const target = dmMessages.querySelector(`.dm-bubble[data-id="${id}"]`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("dm-bubble-highlight");
+  setTimeout(() => target.classList.remove("dm-bubble-highlight"), 1500);
+}
+
 function renderMessages(messages) {
   dmMessages.innerHTML = "";
   for (const m of messages) {
     const bubble = document.createElement("div");
     bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}${m.mediaType ? " media" : ""}`;
+    bubble.dataset.id = m.id;
+
+    if (m.replyTo) {
+      const quote = document.createElement("div");
+      quote.className = "dm-quote";
+      quote.dataset.id = m.replyTo.id;
+
+      const quoteName = document.createElement("div");
+      quoteName.className = "dm-quote-name";
+      quoteName.textContent = m.replyTo.senderUsername;
+
+      const quoteText = document.createElement("div");
+      quoteText.className = "dm-quote-text";
+      appendLinkifiedText(snippet(m.replyTo), quoteText);
+
+      quote.appendChild(quoteName);
+      quote.appendChild(quoteText);
+      quote.addEventListener("click", (e) => {
+        e.stopPropagation();
+        jumpToMessage(m.replyTo.id);
+      });
+      bubble.appendChild(quote);
+    }
 
     if (m.mediaType) {
       const img = document.createElement("img");
@@ -127,7 +259,7 @@ function renderMessages(messages) {
 
     if (m.content) {
       const text = document.createElement("div");
-      text.textContent = m.content;
+      appendLinkifiedText(m.content, text);
       bubble.appendChild(text);
     }
 
@@ -139,6 +271,18 @@ function renderMessages(messages) {
     });
 
     bubble.appendChild(meta);
+
+    const replyBtn = document.createElement("button");
+    replyBtn.type = "button";
+    replyBtn.className = "dm-reply-btn";
+    replyBtn.setAttribute("aria-label", "Responder");
+    replyBtn.innerHTML = '<i class="bi bi-reply"></i>';
+    replyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setReply(m);
+    });
+    bubble.appendChild(replyBtn);
+
     dmMessages.appendChild(bubble);
   }
   dmMessages.scrollTop = dmMessages.scrollHeight;
@@ -197,9 +341,11 @@ async function uploadImageBase64(imageBase64) {
     body: JSON.stringify({
       recipientUserId: selectedUser.userId,
       imageBase64,
+      replyToId: replyingTo?.id,
     }),
   });
   if (!r.ok) throw new Error("upload failed");
+  clearReply();
   await pollConversation();
 }
 
@@ -273,10 +419,12 @@ async function sendMessage() {
         action: "send",
         recipientUserId: selectedUser.userId,
         content,
+        replyToId: replyingTo?.id,
       }),
     });
     if (!r.ok) throw new Error("send failed");
     await pollConversation();
+    clearReply();
   } catch (e) {
     console.warn("[app] sendMessage:", e);
   }
@@ -290,6 +438,8 @@ dmInput.addEventListener("keydown", (e) => {
 });
 
 dmSend.addEventListener("click", sendMessage);
+
+replyCancel.addEventListener("click", clearReply);
 
 dmInput.addEventListener("input", async () => {
   if (!selectedUser) return;
@@ -354,11 +504,24 @@ dmLightbox.addEventListener("click", (e) => {
   }
 });
 
-// Close lightbox with Esc.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !dmLightbox.hidden) {
+  if (e.key !== "Escape") return;
+
+  if (!dmLightbox.hidden) {
     e.preventDefault();
     closeLightbox();
+    return;
+  }
+
+  if (replyingTo) {
+    e.preventDefault();
+    clearReply();
+    return;
+  }
+
+  if (drawerOpen) {
+    e.preventDefault();
+    closeDrawer();
   }
 });
 

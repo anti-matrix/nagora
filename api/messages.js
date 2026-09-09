@@ -8,7 +8,15 @@ function parseQuery(req) {
 }
 
 function toCamelMessage(row) {
-  return {
+  const replyTo = row.reply_id ? {
+    id: row.reply_id,
+    senderId: row.reply_sender_id,
+    senderUsername: row.reply_sender_username,
+    content: row.reply_content,
+    mediaType: row.reply_media_type || null,
+  } : null;
+
+  const message = {
     id: row.id,
     senderId: row.sender_id,
     recipientId: row.recipient_id,
@@ -19,6 +27,9 @@ function toCamelMessage(row) {
     mediaWidth: row.media_width || null,
     mediaHeight: row.media_height || null,
   };
+
+  if (replyTo) message.replyTo = replyTo;
+  return message;
 }
 
 async function getHistory(req, res) {
@@ -47,12 +58,19 @@ async function getHistory(req, res) {
   const them = withUserId;
 
   const { rows } = await query(
-    `SELECT id, sender_id, recipient_id, content, created_at, read_at,
-            media_type, media_width, media_height
-     FROM messages
-     WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
-       AND ($3::int IS NULL OR id < $3)
-     ORDER BY created_at DESC
+    `SELECT m.id, m.sender_id, m.recipient_id, m.content, m.created_at, m.read_at,
+            m.media_type, m.media_width, m.media_height, m.reply_to_id,
+            rm.id AS reply_id,
+            rm.sender_id AS reply_sender_id,
+            rm.content AS reply_content,
+            rm.media_type AS reply_media_type,
+            ra.username AS reply_sender_username
+     FROM messages m
+     LEFT JOIN messages rm ON rm.id = m.reply_to_id
+     LEFT JOIN accounts ra ON ra.user_id = rm.sender_id
+     WHERE ((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+       AND ($3::int IS NULL OR m.id < $3)
+     ORDER BY m.created_at DESC
      LIMIT $4`,
     [me, them, before, limit]
   );
@@ -76,6 +94,9 @@ async function sendMessage(req, res) {
     return res.status(400).json({ error: "Sender account is not initialized" });
   }
 
+  const me = req.account.user_id;
+  const them = recipientUserId;
+
   const { rows: recipientRows } = await query(
     "SELECT username, user_id FROM accounts WHERE user_id = $1",
     [recipientUserId]
@@ -84,9 +105,50 @@ async function sendMessage(req, res) {
     return res.status(400).json({ error: "Recipient not found" });
   }
 
+  let replyToId = null;
+  if (req.body.replyToId !== undefined && req.body.replyToId !== null) {
+    const parsed = parseInt(req.body.replyToId, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return res.status(400).json({ error: "Invalid reply message" });
+    }
+    replyToId = parsed;
+  }
+
+  if (replyToId) {
+    const { rows: replyRows } = await query(
+      "SELECT sender_id, recipient_id FROM messages WHERE id = $1",
+      [replyToId]
+    );
+    if (!replyRows.length) {
+      return res.status(400).json({ error: "Invalid reply message" });
+    }
+    const rr = replyRows[0];
+    if (!((rr.sender_id === me && rr.recipient_id === them) || (rr.sender_id === them && rr.recipient_id === me))) {
+      return res.status(400).json({ error: "Invalid reply message" });
+    }
+  }
+
+  const { rows: insertRows } = await query(
+    `INSERT INTO messages
+       (sender_id, recipient_id, content, reply_to_id)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, sender_id, recipient_id, content, created_at, reply_to_id`,
+    [me, them, text, replyToId]
+  );
+
   const { rows } = await query(
-    "INSERT INTO messages (sender_id, recipient_id, content) VALUES ($1, $2, $3) RETURNING id, sender_id, recipient_id, content, created_at, media_type, media_width, media_height",
-    [req.account.user_id, recipientUserId, text]
+    `SELECT m.id, m.sender_id, m.recipient_id, m.content, m.created_at, m.read_at,
+            m.media_type, m.media_width, m.media_height, m.reply_to_id,
+            rm.id AS reply_id,
+            rm.sender_id AS reply_sender_id,
+            rm.content AS reply_content,
+            rm.media_type AS reply_media_type,
+            ra.username AS reply_sender_username
+     FROM messages m
+     LEFT JOIN messages rm ON rm.id = m.reply_to_id
+     LEFT JOIN accounts ra ON ra.user_id = rm.sender_id
+     WHERE m.id = $1`,
+    [insertRows[0].id]
   );
 
   res.status(201).json({ ok: true, message: toCamelMessage(rows[0]) });
