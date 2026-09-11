@@ -1,10 +1,7 @@
 {
   "trailingSlash": false,
   "functions": {
-    "api/shell.js": {
-      "maxDuration": 30
-    },
-    "api/logs.js": {
+    "api/[[...route]].js": {
       "maxDuration": 30
     }
   }
