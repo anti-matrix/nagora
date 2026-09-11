@@ -2,6 +2,16 @@ let me = null;
 let selectedUser = null;
 let pollInterval = null;
 let lastMessageId = null;
+const MESSAGE_PAGE_LIMIT = 50;
+const NEAR_BOTTOM_THRESHOLD = 60;
+const LOAD_OLDER_THRESHOLD = 80;
+
+let messageList = [];
+let oldestLoadedId = null;
+let noMoreOlder = false;
+let loadingOlder = false;
+let conversationEpoch = 0;
+
 let typingDebounceTimer = null;
 let lastTypingPost = 0;
 let replyingTo = null;
@@ -250,7 +260,14 @@ function selectUser(user) {
   dmStatus.className = `status-dot ${user.online ? "online" : "offline"}`;
   dmTyping.textContent = "";
   dmMessages.innerHTML = "";
+  dmMessages.classList.remove("loading-older");
+
+  messageList = [];
+  oldestLoadedId = null;
+  noMoreOlder = false;
+  loadingOlder = false;
   lastMessageId = null;
+  conversationEpoch++;
 
   markRead(user.userId);
   startPoll();
@@ -353,9 +370,21 @@ function jumpToMessage(id) {
   setTimeout(() => target.classList.remove("dm-bubble-highlight"), 1500);
 }
 
-function renderMessages(messages) {
+function renderMessages(options = {}) {
+  const scrollMode = options.scroll || "bottom";
+
+  let wasNearBottom = false;
+  let oldScrollTop = 0;
+  if (scrollMode === "auto") {
+    const distanceToBottom =
+      dmMessages.scrollHeight - dmMessages.scrollTop - dmMessages.clientHeight;
+    wasNearBottom = distanceToBottom <= NEAR_BOTTOM_THRESHOLD;
+    oldScrollTop = dmMessages.scrollTop;
+  }
+
   dmMessages.innerHTML = "";
-  for (const m of messages) {
+
+  for (const m of messageList) {
     const bubble = document.createElement("div");
     bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}${m.mediaType ? " media" : ""}`;
     bubble.dataset.id = m.id;
@@ -417,7 +446,14 @@ function renderMessages(messages) {
 
     dmMessages.appendChild(bubble);
   }
-  dmMessages.scrollTop = dmMessages.scrollHeight;
+
+  if (scrollMode === "bottom" || (scrollMode === "auto" && wasNearBottom)) {
+    dmMessages.scrollTop = dmMessages.scrollHeight;
+  } else if (scrollMode === "preserve") {
+    // caller sets the exact compensated scrollTop after prepend
+  } else if (scrollMode === "auto") {
+    dmMessages.scrollTop = oldScrollTop;
+  }
 }
 
 function showImageError(msg) {
@@ -487,17 +523,35 @@ async function uploadImageBase64(imageBase64) {
 async function pollConversation() {
   if (!selectedUser || document.visibilityState !== "visible") return;
 
+  const epoch = conversationEpoch;
+
   try {
-    const r = await fetch(`/api/messages?with=${encodeURIComponent(selectedUser.userId)}&limit=50`, {
-      credentials: "include",
-    });
+    const r = await fetch(
+      `/api/messages?with=${encodeURIComponent(selectedUser.userId)}&limit=${MESSAGE_PAGE_LIMIT}`,
+      { credentials: "include" }
+    );
     if (!r.ok) throw new Error("messages fetch failed");
     const data = await r.json();
 
-    const last = data.messages[data.messages.length - 1];
-    if (last && last.id !== lastMessageId) {
-      renderMessages(data.messages);
-      lastMessageId = last.id;
+    if (epoch !== conversationEpoch) return;
+
+    const fetched = data.messages || [];
+
+    if (messageList.length === 0) {
+      messageList = fetched.slice();
+      if (messageList.length > 0) {
+        oldestLoadedId = messageList[0].id;
+        lastMessageId = messageList[messageList.length - 1].id;
+      }
+      noMoreOlder = fetched.length < MESSAGE_PAGE_LIMIT;
+      renderMessages({ scroll: "bottom" });
+    } else {
+      const newMessages = fetched.filter((m) => m.id > lastMessageId);
+      if (newMessages.length > 0) {
+        messageList = messageList.concat(newMessages);
+        lastMessageId = messageList[messageList.length - 1].id;
+        renderMessages({ scroll: "auto" });
+      }
     }
 
     dmTyping.textContent = data.typing ? "digitando…" : "";
@@ -506,9 +560,59 @@ async function pollConversation() {
   }
 }
 
+async function loadOlder() {
+  if (!selectedUser || noMoreOlder || loadingOlder) return;
+  if (messageList.length === 0 || oldestLoadedId == null) return;
+
+  const epoch = conversationEpoch;
+  loadingOlder = true;
+  showOlderLoader(true);
+
+  try {
+    const r = await fetch(
+      `/api/messages?with=${encodeURIComponent(selectedUser.userId)}&before=${encodeURIComponent(oldestLoadedId)}&limit=${MESSAGE_PAGE_LIMIT}`,
+      { credentials: "include" }
+    );
+    if (!r.ok) throw new Error("older messages fetch failed");
+    const data = await r.json();
+
+    if (epoch !== conversationEpoch) return;
+
+    const older = data.messages || [];
+
+    if (older.length === 0) {
+      noMoreOlder = true;
+      return;
+    }
+
+    showOlderLoader(false);
+
+    const oldScrollHeight = dmMessages.scrollHeight;
+    const oldScrollTop = dmMessages.scrollTop;
+
+    messageList = older.concat(messageList);
+    oldestLoadedId = messageList[0].id;
+    noMoreOlder = older.length < MESSAGE_PAGE_LIMIT;
+
+    renderMessages({ scroll: "preserve" });
+    dmMessages.scrollTop = oldScrollTop + (dmMessages.scrollHeight - oldScrollHeight);
+  } catch (e) {
+    console.warn("[app] loadOlder:", e);
+  } finally {
+    if (epoch === conversationEpoch) {
+      loadingOlder = false;
+      showOlderLoader(false);
+    }
+  }
+}
+
+function showOlderLoader(show) {
+  dmMessages.classList.toggle("loading-older", show);
+}
+
 function startPoll() {
-  if (pollInterval) return;
   pollConversation();
+  if (pollInterval) return;
   pollInterval = setInterval(pollConversation, 500);
 }
 
@@ -905,6 +1009,17 @@ dmMessages.addEventListener("keydown", (e) => {
     dmMessages.scrollBy({ top: delta, behavior: "smooth" });
   }
 });
+
+dmMessages.addEventListener(
+  "scroll",
+  () => {
+    if (noMoreOlder || loadingOlder || messageList.length === 0) return;
+    if (dmMessages.scrollTop <= LOAD_OLDER_THRESHOLD) {
+      loadOlder();
+    }
+  },
+  { passive: true }
+);
 
 async function heartbeat() {
   try {
