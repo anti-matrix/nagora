@@ -39,6 +39,7 @@ const dmLightboxClose = document.getElementById("dm-lightbox-close");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 const menuBtn = document.getElementById("dm-menu-btn");
+const placeholderMenuBtn = document.getElementById("dm-placeholder-menu-btn");
 const replyBar = document.getElementById("dm-reply-bar");
 const replyName = document.getElementById("dm-reply-name");
 const replySnippet = document.getElementById("dm-reply-snippet");
@@ -83,8 +84,10 @@ async function answerRequest(targetUserId, action) {
     });
     if (!r.ok) throw new Error(`${action} failed`);
     await fetchSocial();
+    return true;
   } catch (e) {
     console.warn(`[app] ${action} request:`, e);
+    return false;
   }
 }
 
@@ -270,12 +273,17 @@ function closeDrawer() {
   menuBtn.setAttribute("aria-expanded", "false");
   menuBtn.setAttribute("aria-label", "Abrir lista de usuários");
   drawerOpen = false;
-  menuBtn.focus();
+  if (!dmPanel.hidden) {
+    menuBtn.focus();
+  } else {
+    placeholderMenuBtn?.focus();
+  }
 }
 
 menuBtn.addEventListener("click", () => {
   if (drawerOpen) closeDrawer(); else openDrawer();
 });
+placeholderMenuBtn.addEventListener("click", openDrawer);
 
 sidebarOverlay.addEventListener("click", closeDrawer);
 
@@ -785,8 +793,8 @@ function renderBubble() {
     btn.type = "button";
     btn.textContent = "Enviar mensagem";
     btn.addEventListener("click", () => {
-      closeBubble();
-      selectUser(bubbleUser);
+      const u = bubbleUser;
+      selectUser(u);
     });
     userBubbleActions.appendChild(btn);
   } else if (incoming) {
@@ -794,9 +802,9 @@ function renderBubble() {
     accept.type = "button";
     accept.textContent = "Aceitar";
     accept.addEventListener("click", async () => {
-      await answerRequest(bubbleUser.userId, "accept");
-      closeBubble();
-      selectUser(bubbleUser);
+      const u = bubbleUser;
+      const ok = await answerRequest(u.userId, "accept");
+      if (ok) selectUser(u);
     });
 
     const decline = document.createElement("button");
@@ -923,7 +931,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!me) return;
 
   renderProfileSummary();
-  fetchSocial();
+  await fetchSocial();
+  if (window.innerWidth <= 768 && !selectedUser) {
+    openDrawer();
+  }
   heartbeat();
   setInterval(heartbeat, 60000);
   socialInterval = setInterval(fetchSocial, 5000);
