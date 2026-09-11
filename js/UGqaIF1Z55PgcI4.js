@@ -7,6 +7,18 @@ let lastTypingPost = 0;
 let replyingTo = null;
 let drawerOpen = false;
 
+let social = {
+  friendIds: new Set(),
+  incoming: new Map(),
+  outgoing: new Map(),
+};
+let searchTerm = "";
+let profileExpanded = false;
+let bubbleUser = null;
+let usersCache = [];
+let socialInterval = null;
+let badgeInterval = null;
+
 const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
 const dmPanel = document.getElementById("dm-panel");
@@ -32,7 +44,32 @@ const replyName = document.getElementById("dm-reply-name");
 const replySnippet = document.getElementById("dm-reply-snippet");
 const replyCancel = document.getElementById("dm-reply-cancel");
 
+const searchToggle = document.getElementById("search-toggle");
+const searchBox = document.getElementById("search-box");
+const searchInput = document.getElementById("search-input");
+
+const profileCard = document.getElementById("profile-card");
+const profileSummary = document.getElementById("profile-summary");
+const profileName = document.getElementById("profile-name");
+const profileHandle = document.getElementById("profile-handle");
+const profileBody = document.getElementById("profile-body");
+const profileBadge = document.getElementById("profile-badge");
+const shownameInput = document.getElementById("showname-input");
+const shownameSave = document.getElementById("showname-save");
+const profileLogout = document.getElementById("profile-logout");
+const profileMessage = document.getElementById("profile-message");
+
+const userBubble = document.getElementById("user-bubble");
+const userBubbleClose = document.getElementById("user-bubble-close");
+const userBubbleName = document.getElementById("user-bubble-name");
+const userBubbleHandle = document.getElementById("user-bubble-handle");
+const userBubbleActions = document.getElementById("user-bubble-actions");
+
 const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+
+function displayName(u) {
+  return u.showname || u.username;
+}
 
 function appendLinkifiedText(text, parent) {
   let lastIndex = 0;
@@ -70,27 +107,79 @@ async function initSession() {
       location.href = "index.html";
       return;
     }
-    me = { username: data.username, userId: data.userId };
+    me = { username: data.username, userId: data.userId, showname: data.showname || null };
   } catch (e) {
     console.warn("[app] initSession:", e);
     location.href = "index.html";
   }
 }
 
-async function fetchUsers() {
+async function fetchSocial() {
+  if (!me) return;
   try {
-    const r = await fetch("/api/users", { credentials: "include" });
-    if (!r.ok) throw new Error("users fetch failed");
-    const { users } = await r.json();
-    renderUsers(users);
+    const [usersRes, friendsRes, incomingRes, outgoingRes] = await Promise.all([
+      fetch("/api/users", { credentials: "include" }),
+      fetch("/api/friends?type=friends", { credentials: "include" }),
+      fetch("/api/friends?type=incoming", { credentials: "include" }),
+      fetch("/api/friends?type=outgoing", { credentials: "include" }),
+    ]);
+
+    if (!usersRes.ok) throw new Error("users fetch failed");
+    const { users } = await usersRes.json();
+    usersCache = users || [];
+
+    if (friendsRes.ok) {
+      const { users: friends } = await friendsRes.json();
+      social.friendIds = new Set((friends || []).map(u => u.userId));
+    }
+    if (incomingRes.ok) {
+      const { requests } = await incomingRes.json();
+      social.incoming = new Map((requests || []).map(r => [r.senderId, r]));
+    }
+    if (outgoingRes.ok) {
+      const { requests } = await outgoingRes.json();
+      social.outgoing = new Map((requests || []).map(r => [r.recipientId, r]));
+    }
+
+    renderUsers(usersCache);
+    renderProfileBadge();
   } catch (e) {
-    console.warn("[app] fetchUsers:", e);
+    console.warn("[app] fetchSocial:", e);
+  }
+}
+
+async function fetchIncomingBadge() {
+  if (!me) return;
+  try {
+    const r = await fetch("/api/friends?type=incoming", { credentials: "include" });
+    if (!r.ok) return;
+    const { requests } = await r.json();
+    social.incoming = new Map((requests || []).map(req => [req.senderId, req]));
+    renderProfileBadge();
+    if (bubbleUser) renderBubble();
+  } catch (e) {
+    console.warn("[app] fetchIncomingBadge:", e);
   }
 }
 
 function renderUsers(users) {
   userList.innerHTML = "";
-  for (const u of users) {
+
+  const filtered = (users || []).filter(u => {
+    if (u.userId === me?.userId) return false;
+    if (!searchTerm) return true;
+    return u.username.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  if (searchTerm && !filtered.length) {
+    const none = document.createElement("div");
+    none.className = "user-row no-results";
+    none.textContent = "Nenhum usuário encontrado";
+    userList.appendChild(none);
+    return;
+  }
+
+  for (const u of filtered) {
     const row = document.createElement("div");
     row.className = "user-row";
     row.dataset.username = u.username;
@@ -102,20 +191,29 @@ function renderUsers(users) {
 
     const name = document.createElement("span");
     name.className = "username";
-    name.textContent = u.username;
+    name.textContent = displayName(u);
 
     row.appendChild(dot);
     row.appendChild(name);
 
     if (u.userId) {
-      row.addEventListener("click", () => selectUser(u));
+      row.addEventListener("click", () => handleUserRowClick(u));
     }
 
     userList.appendChild(row);
   }
 }
 
+function handleUserRowClick(user) {
+  if (social.friendIds.has(user.userId)) {
+    selectUser(user);
+  } else {
+    openBubble(user);
+  }
+}
+
 function selectUser(user) {
+  closeBubble();
   for (const el of userList.querySelectorAll(".user-row")) {
     el.classList.remove("active");
   }
@@ -125,7 +223,8 @@ function selectUser(user) {
   selectedUser = user;
   dmPlaceholder.hidden = true;
   dmPanel.hidden = false;
-  dmUsername.textContent = user.username;
+  dmUsername.textContent = displayName(user);
+  dmUsername.dataset.userid = user.userId;
   dmStatus.className = `status-dot ${user.online ? "online" : "offline"}`;
   dmTyping.textContent = "";
   dmMessages.innerHTML = "";
@@ -185,8 +284,14 @@ function snippet(replyTo) {
 }
 
 function setReply(message) {
-  const senderUsername =
-    message.senderId === me.userId ? me.username : selectedUser.username;
+  let senderUsername;
+  if (message.senderId === me.userId) {
+    senderUsername = displayName(me);
+  } else if (selectedUser && selectedUser.userId === message.senderId) {
+    senderUsername = displayName(selectedUser);
+  } else {
+    senderUsername = message.senderUsername || message.senderId;
+  }
   replyingTo = {
     id: message.id,
     senderId: message.senderId,
@@ -344,7 +449,10 @@ async function uploadImageBase64(imageBase64) {
       replyToId: replyingTo?.id,
     }),
   });
-  if (!r.ok) throw new Error("upload failed");
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.error || "upload failed");
+  }
   clearReply();
   await pollConversation();
 }
@@ -422,7 +530,10 @@ async function sendMessage() {
         replyToId: replyingTo?.id,
       }),
     });
-    if (!r.ok) throw new Error("send failed");
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      throw new Error(data.error || "send failed");
+    }
     await pollConversation();
     clearReply();
   } catch (e) {
@@ -473,7 +584,7 @@ dmImageBtn.addEventListener("click", () => {
 
 dmImageInput.addEventListener("change", async () => {
   const file = dmImageInput.files?.[0];
-  dmImageInput.value = ""; // allow re-selecting the same file
+  dmImageInput.value = "";
   if (!file || !selectedUser) return;
 
   if (!file.type.startsWith("image/")) {
@@ -486,7 +597,7 @@ dmImageInput.addEventListener("change", async () => {
     await uploadImageBase64(base64);
   } catch (e) {
     console.warn("[app] image upload pipeline:", e);
-    showImageError("Falha ao enviar imagem.");
+    showImageError(e.message || "Falha ao enviar imagem.");
   }
 });
 
@@ -504,8 +615,211 @@ dmLightbox.addEventListener("click", (e) => {
   }
 });
 
+// Search behavior
+searchToggle.addEventListener("click", () => {
+  const hidden = searchBox.hidden;
+  searchBox.hidden = !hidden;
+  if (!searchBox.hidden) searchInput.focus();
+});
+
+searchInput.addEventListener("input", () => {
+  searchTerm = String(searchInput.value).trim().replace(/^@/, "");
+  renderUsers(usersCache);
+});
+
+// Profile accordion
+function renderProfileSummary() {
+  if (!me) return;
+  profileName.textContent = `@${me.username}`;
+  profileHandle.textContent = `@${me.username}`;
+  shownameInput.value = me.showname || "";
+}
+
+function toggleProfile() {
+  profileExpanded = !profileExpanded;
+  profileCard.classList.toggle("expanded", profileExpanded);
+  profileBody.hidden = !profileExpanded;
+  profileSummary.setAttribute("aria-expanded", String(profileExpanded));
+  const chevron = profileSummary.querySelector(".profile-chevron i");
+  if (chevron) {
+    chevron.classList.toggle("bi-chevron-up", !profileExpanded);
+    chevron.classList.toggle("bi-chevron-down", profileExpanded);
+  }
+}
+
+function renderProfileBadge() {
+  profileBadge.hidden = social.incoming.size === 0;
+}
+
+function showProfileMessage(text, isError = true) {
+  profileMessage.textContent = text;
+  profileMessage.className = isError ? "profile-message error" : "profile-message success";
+  setTimeout(() => {
+    if (profileMessage.textContent === text) {
+      profileMessage.textContent = "";
+      profileMessage.className = "profile-message";
+    }
+  }, 3000);
+}
+
+profileSummary.addEventListener("click", toggleProfile);
+
+shownameSave.addEventListener("click", async () => {
+  const value = String(shownameInput.value).trim();
+  try {
+    const r = await fetch("/api/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "setShowname", showname: value }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showProfileMessage(data.error || "Erro ao salvar");
+      return;
+    }
+    me.showname = data.showname || null;
+    renderProfileSummary();
+    showProfileMessage("Salvo", false);
+  } catch (e) {
+    console.warn("[app] save showname:", e);
+    showProfileMessage("Erro ao salvar");
+  }
+});
+
+profileLogout.addEventListener("click", async () => {
+  try {
+    await fetch("/api/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch (e) {
+    console.warn("[app] logout:", e);
+  }
+  location.href = "index.html";
+});
+
+// User bubble
+function openBubble(user) {
+  bubbleUser = user;
+  userBubble.hidden = false;
+  renderBubble();
+}
+
+function closeBubble() {
+  bubbleUser = null;
+  userBubble.hidden = true;
+}
+
+function renderBubble() {
+  if (!bubbleUser) return;
+  userBubbleName.textContent = displayName(bubbleUser);
+  userBubbleHandle.textContent = `@${bubbleUser.username}`;
+  userBubbleActions.innerHTML = "";
+
+  const isFriend = social.friendIds.has(bubbleUser.userId);
+  const incoming = social.incoming.has(bubbleUser.userId);
+  const outgoing = social.outgoing.has(bubbleUser.userId);
+
+  if (isFriend) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Enviar mensagem";
+    btn.addEventListener("click", () => {
+      closeBubble();
+      selectUser(bubbleUser);
+    });
+    userBubbleActions.appendChild(btn);
+  } else if (incoming) {
+    const accept = document.createElement("button");
+    accept.type = "button";
+    accept.textContent = "Aceitar";
+    accept.addEventListener("click", async () => {
+      try {
+        const r = await fetch("/api/friends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "accept", targetUserId: bubbleUser.userId }),
+        });
+        if (!r.ok) throw new Error("accept failed");
+        await fetchSocial();
+        closeBubble();
+        selectUser(bubbleUser);
+      } catch (e) {
+        console.warn("[app] accept request:", e);
+      }
+    });
+
+    const decline = document.createElement("button");
+    decline.type = "button";
+    decline.textContent = "Recusar";
+    decline.addEventListener("click", async () => {
+      try {
+        const r = await fetch("/api/friends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "decline", targetUserId: bubbleUser.userId }),
+        });
+        if (!r.ok) throw new Error("decline failed");
+        await fetchSocial();
+        closeBubble();
+      } catch (e) {
+        console.warn("[app] decline request:", e);
+      }
+    });
+
+    userBubbleActions.appendChild(accept);
+    userBubbleActions.appendChild(decline);
+  } else if (outgoing) {
+    const label = document.createElement("button");
+    label.type = "button";
+    label.disabled = true;
+    label.textContent = "Solicitação enviada";
+    userBubbleActions.appendChild(label);
+  } else {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Enviar solicitação";
+    btn.addEventListener("click", async () => {
+      try {
+        const r = await fetch("/api/friends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "send", targetUserId: bubbleUser.userId }),
+        });
+        if (!r.ok) throw new Error("send request failed");
+        await fetchSocial();
+        renderBubble();
+      } catch (e) {
+        console.warn("[app] send request:", e);
+      }
+    });
+    userBubbleActions.appendChild(btn);
+  }
+}
+
+userBubbleClose.addEventListener("click", closeBubble);
+
+// Close bubble when clicking outside.
+document.addEventListener("click", (e) => {
+  if (!bubbleUser) return;
+  if (userBubble.contains(e.target)) return;
+  const row = e.target.closest(".user-row");
+  if (row && row.dataset.userid === bubbleUser.userId) return;
+  closeBubble();
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+
+  if (bubbleUser) {
+    e.preventDefault();
+    closeBubble();
+    return;
+  }
 
   if (!dmLightbox.hidden) {
     e.preventDefault();
@@ -571,8 +885,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   await initSession();
   if (!me) return;
 
-  fetchUsers();
+  renderProfileSummary();
+  fetchSocial();
   heartbeat();
   setInterval(heartbeat, 60000);
-  setInterval(fetchUsers, 30000);
+  socialInterval = setInterval(fetchSocial, 5000);
+  badgeInterval = setInterval(fetchIncomingBadge, 500);
 });

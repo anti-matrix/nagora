@@ -1,12 +1,12 @@
 import { requireAccountApiKey, requireAccountApiKeyNoSchema } from "../lib/auth.js";
-import { query } from "../lib/db.js";
+import { query, areFriends } from "../lib/db.js";
 import sharp from "sharp";
 
 function toCamelMessage(row) {
   const replyTo = row.reply_id ? {
     id: row.reply_id,
     senderId: row.reply_sender_id,
-    senderUsername: row.reply_sender_username,
+    senderUsername: row.reply_sender_showname || row.reply_sender_username,
     content: row.reply_content,
     mediaType: row.reply_media_type || null,
   } : null;
@@ -47,6 +47,11 @@ async function uploadFile(req, res) {
   );
   if (!recipientRows.length) {
     return res.status(400).json({ error: "Recipient not found" });
+  }
+
+  const friends = await areFriends(me, them);
+  if (!friends) {
+    return res.status(403).json({ error: "You must be friends to send messages" });
   }
 
   let replyToId = null;
@@ -105,7 +110,8 @@ async function uploadFile(req, res) {
             rm.sender_id AS reply_sender_id,
             rm.content AS reply_content,
             rm.media_type AS reply_media_type,
-            ra.username AS reply_sender_username
+            ra.username AS reply_sender_username,
+            ra.showname AS reply_sender_showname
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.reply_to_id
      LEFT JOIN accounts ra ON ra.user_id = rm.sender_id

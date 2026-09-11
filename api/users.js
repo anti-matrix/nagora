@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   try {
     await ensureSchema();
     const { rows } = await query(
-      `SELECT username, user_id, last_seen_at,
+      `SELECT username, user_id, showname, last_seen_at,
               (last_seen_at > now() - interval '5 minutes') AS online
        FROM accounts
        ORDER BY username`
@@ -20,6 +20,7 @@ export default async function handler(req, res) {
       userId: r.user_id,
       online: !!r.online,
       lastSeenAt: r.last_seen_at,
+      showname: r.showname || null,
     }));
 
     res.status(200).json({ users });
