@@ -29,7 +29,7 @@ const handlers = {
 };
 
 export default async function handler(req, res) {
-  const route = (req.query.route || [])[0];
+  const route = req.query.route;
   const h = handlers[route];
 
   if (!h) {
