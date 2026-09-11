@@ -708,8 +708,8 @@ body {
 
 .profile-badge {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: -2px;
+    left: 18px;
     width: 8px;
     height: 8px;
     background: #ff4444;
@@ -755,6 +755,7 @@ body {
 
 .profile-showname-row input {
     flex: 1;
+    min-width: 0;
     background: #0d0d0d;
     border: 1px solid #444;
     color: #fff;
@@ -774,6 +775,8 @@ body {
 }
 
 .profile-showname-row button {
+    flex-shrink: 0;
+    white-space: nowrap;
     background: #222;
     border: 1px solid #444;
     color: #fff;
@@ -929,4 +932,45 @@ body {
     .sidebar-overlay[hidden] {
         display: none !important;
     }
+}
+
+/* Incoming friend requests inside profile accordion */
+.profile-requests-heading {
+    color: #aaa;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+}
+
+.profile-request-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-request-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-request-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.profile-request-actions button {
+    background: #222;
+    border: 1px solid #444;
+    color: #fff;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.profile-request-actions button:hover {
+    background: #333;
 }

@@ -58,6 +58,8 @@ const shownameInput = document.getElementById("showname-input");
 const shownameSave = document.getElementById("showname-save");
 const profileLogout = document.getElementById("profile-logout");
 const profileMessage = document.getElementById("profile-message");
+const profileRequests = document.getElementById("profile-requests");
+const profileRequestsList = document.getElementById("profile-requests-list");
 
 const userBubble = document.getElementById("user-bubble");
 const userBubbleClose = document.getElementById("user-bubble-close");
@@ -69,6 +71,21 @@ const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
 function displayName(u) {
   return u.showname || u.username;
+}
+
+async function answerRequest(targetUserId, action) {
+  try {
+    const r = await fetch("/api/friends", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action, targetUserId }),
+    });
+    if (!r.ok) throw new Error(`${action} failed`);
+    await fetchSocial();
+  } catch (e) {
+    console.warn(`[app] ${action} request:`, e);
+  }
 }
 
 function appendLinkifiedText(text, parent) {
@@ -143,6 +160,7 @@ async function fetchSocial() {
 
     renderUsers(usersCache);
     renderProfileBadge();
+    renderIncomingRequests();
   } catch (e) {
     console.warn("[app] fetchSocial:", e);
   }
@@ -156,6 +174,7 @@ async function fetchIncomingBadge() {
     const { requests } = await r.json();
     social.incoming = new Map((requests || []).map(req => [req.senderId, req]));
     renderProfileBadge();
+    renderIncomingRequests();
     if (bubbleUser) renderBubble();
   } catch (e) {
     console.warn("[app] fetchIncomingBadge:", e);
@@ -651,6 +670,46 @@ function renderProfileBadge() {
   profileBadge.hidden = social.incoming.size === 0;
 }
 
+function renderIncomingRequests() {
+  profileRequestsList.innerHTML = "";
+  if (social.incoming.size === 0) {
+    profileRequests.hidden = true;
+    return;
+  }
+  profileRequests.hidden = false;
+
+  for (const req of social.incoming.values()) {
+    const row = document.createElement("div");
+    row.className = "profile-request-row";
+
+    const name = document.createElement("span");
+    name.className = "profile-request-name";
+    name.textContent = displayName({
+      showname: req.senderShowname,
+      username: req.senderUsername,
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "profile-request-actions";
+
+    const acceptBtn = document.createElement("button");
+    acceptBtn.type = "button";
+    acceptBtn.textContent = "Aceitar";
+    acceptBtn.addEventListener("click", () => answerRequest(req.senderId, "accept"));
+
+    const declineBtn = document.createElement("button");
+    declineBtn.type = "button";
+    declineBtn.textContent = "Recusar";
+    declineBtn.addEventListener("click", () => answerRequest(req.senderId, "decline"));
+
+    actions.appendChild(acceptBtn);
+    actions.appendChild(declineBtn);
+    row.appendChild(name);
+    row.appendChild(actions);
+    profileRequestsList.appendChild(row);
+  }
+}
+
 function showProfileMessage(text, isError = true) {
   profileMessage.textContent = text;
   profileMessage.className = isError ? "profile-message error" : "profile-message success";
@@ -735,39 +794,17 @@ function renderBubble() {
     accept.type = "button";
     accept.textContent = "Aceitar";
     accept.addEventListener("click", async () => {
-      try {
-        const r = await fetch("/api/friends", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ action: "accept", targetUserId: bubbleUser.userId }),
-        });
-        if (!r.ok) throw new Error("accept failed");
-        await fetchSocial();
-        closeBubble();
-        selectUser(bubbleUser);
-      } catch (e) {
-        console.warn("[app] accept request:", e);
-      }
+      await answerRequest(bubbleUser.userId, "accept");
+      closeBubble();
+      selectUser(bubbleUser);
     });
 
     const decline = document.createElement("button");
     decline.type = "button";
     decline.textContent = "Recusar";
     decline.addEventListener("click", async () => {
-      try {
-        const r = await fetch("/api/friends", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ action: "decline", targetUserId: bubbleUser.userId }),
-        });
-        if (!r.ok) throw new Error("decline failed");
-        await fetchSocial();
-        closeBubble();
-      } catch (e) {
-        console.warn("[app] decline request:", e);
-      }
+      await answerRequest(bubbleUser.userId, "decline");
+      closeBubble();
     });
 
     userBubbleActions.appendChild(accept);
