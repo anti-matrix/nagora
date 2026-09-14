@@ -424,6 +424,44 @@ function jumpToMessage(id) {
   setTimeout(() => target.classList.remove("dm-bubble-highlight"), 1500);
 }
 
+function createImageBubble(messageId) {
+  const wrap = document.createElement("div");
+  wrap.className = "dm-media-wrap";
+
+  const img = document.createElement("img");
+  img.src = `/api/file?id=${encodeURIComponent(messageId)}`;
+  img.alt = "Imagem";
+
+  const spinner = document.createElement("div");
+  spinner.className = "dm-image-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+
+  const error = document.createElement("div");
+  error.className = "dm-image-error";
+  error.textContent = "Falha ao carregar imagem";
+
+  function reveal() {
+    wrap.classList.add("loaded");
+  }
+
+  function onError() {
+    wrap.classList.add("error");
+  }
+
+  img.addEventListener("load", reveal);
+  img.addEventListener("error", onError);
+
+  // Already cached/decoded: skip the spinner flash.
+  if (img.complete && img.naturalWidth > 0) {
+    reveal();
+  }
+
+  wrap.appendChild(spinner);
+  wrap.appendChild(error);
+  wrap.appendChild(img);
+  return wrap;
+}
+
 function renderMessages(options = {}) {
   const scrollMode = options.scroll || "bottom";
 
@@ -466,10 +504,7 @@ function renderMessages(options = {}) {
     }
 
     if (m.mediaType) {
-      const img = document.createElement("img");
-      img.src = `/api/file?id=${encodeURIComponent(m.id)}`;
-      img.alt = "Imagem";
-      bubble.appendChild(img);
+      bubble.appendChild(createImageBubble(m.id));
     }
 
     if (m.content) {

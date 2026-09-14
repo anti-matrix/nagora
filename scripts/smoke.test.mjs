@@ -17,7 +17,7 @@ function ok(name, fn) {
 
 console.log("apikey:");
 ok("generateApiKey starts with ngr-", () => {
-  const key = generateApiKey("alice", "ABC123");
+  const key = generateApiKey();
   assert.ok(key.startsWith("ngr-"), `expected ngr- prefix, got ${key}`);
 });
 
