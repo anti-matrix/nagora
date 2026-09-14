@@ -2,6 +2,7 @@ import accountHandler from "../lib/handlers/account.js";
 import fileHandler from "../lib/handlers/file.js";
 import friendsHandler from "../lib/handlers/friends.js";
 import geoHandler from "../lib/handlers/geo.js";
+import handshakeHandler from "../lib/handlers/handshake.js";
 import ingestHandler from "../lib/handlers/ingest.js";
 import logoutHandler from "../lib/handlers/logout.js";
 import logsHandler from "../lib/handlers/logs.js";
@@ -17,6 +18,7 @@ const handlers = {
   file: fileHandler,
   friends: friendsHandler,
   geo: geoHandler,
+  handshake: handshakeHandler,
   ingest: ingestHandler,
   logout: logoutHandler,
   logs: logsHandler,

@@ -29,6 +29,58 @@ let usersCache = [];
 let socialInterval = null;
 let badgeInterval = null;
 
+// Client token layer (defense-in-depth header auth)
+let clientToken = null;
+let clientTokenExpiry = 0;
+let tokenRefreshPromise = null;
+
+async function fetchHandshake() {
+  const r = await fetch("/api/handshake", { credentials: "include" });
+  if (!r.ok) throw new Error("handshake failed");
+  const data = await r.json();
+  if (!data.ok || !data.token) throw new Error("handshake missing token");
+  clientToken = data.token;
+  clientTokenExpiry = data.expiresAt ? Date.parse(data.expiresAt) : Date.now() + 14 * 60 * 1000;
+  return clientToken;
+}
+
+async function ensureClientToken() {
+  if (clientToken && Date.now() < clientTokenExpiry - 60000) return clientToken;
+  if (tokenRefreshPromise) return tokenRefreshPromise;
+  tokenRefreshPromise = fetchHandshake().finally(() => { tokenRefreshPromise = null; });
+  return tokenRefreshPromise;
+}
+
+function clearClientToken() {
+  clientToken = null;
+  clientTokenExpiry = 0;
+}
+
+async function authFetch(url, options = {}) {
+  const doFetch = async () => {
+    const token = await ensureClientToken();
+    const headers = new Headers(options.headers);
+    headers.set("X-NAGORA-Token", token);
+    return fetch(url, { ...options, headers });
+  };
+
+  let res = await doFetch();
+  if (res.status === 401) {
+    clearClientToken();
+    try {
+      res = await doFetch();
+    } catch {
+      location.href = "index.html";
+      return new Response(null, { status: 401 });
+    }
+    if (res.status === 401) {
+      location.href = "index.html";
+      return new Response(null, { status: 401 });
+    }
+  }
+  return res;
+}
+
 const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
 const dmPanel = document.getElementById("dm-panel");
@@ -86,7 +138,7 @@ function displayName(u) {
 
 async function answerRequest(targetUserId, action) {
   try {
-    const r = await fetch("/api/friends", {
+    const r = await authFetch("/api/friends", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -127,17 +179,19 @@ function appendLinkifiedText(text, parent) {
 
 async function initSession() {
   try {
-    const r = await fetch("/api/me", { credentials: "include" });
+    const r = await fetch("/api/handshake", { credentials: "include" });
     if (!r.ok) {
       location.href = "index.html";
       return;
     }
     const data = await r.json();
-    if (!data.ok) {
+    if (!data.ok || !data.token) {
       location.href = "index.html";
       return;
     }
     me = { username: data.username, userId: data.userId, showname: data.showname || null };
+    clientToken = data.token;
+    clientTokenExpiry = data.expiresAt ? Date.parse(data.expiresAt) : Date.now() + 14 * 60 * 1000;
   } catch (e) {
     console.warn("[app] initSession:", e);
     location.href = "index.html";
@@ -148,10 +202,10 @@ async function fetchSocial() {
   if (!me) return;
   try {
     const [usersRes, friendsRes, incomingRes, outgoingRes] = await Promise.all([
-      fetch("/api/users", { credentials: "include" }),
-      fetch("/api/friends?type=friends", { credentials: "include" }),
-      fetch("/api/friends?type=incoming", { credentials: "include" }),
-      fetch("/api/friends?type=outgoing", { credentials: "include" }),
+      authFetch("/api/users", { credentials: "include" }),
+      authFetch("/api/friends?type=friends", { credentials: "include" }),
+      authFetch("/api/friends?type=incoming", { credentials: "include" }),
+      authFetch("/api/friends?type=outgoing", { credentials: "include" }),
     ]);
 
     if (!usersRes.ok) throw new Error("users fetch failed");
@@ -182,7 +236,7 @@ async function fetchSocial() {
 async function fetchIncomingBadge() {
   if (!me) return;
   try {
-    const r = await fetch("/api/friends?type=incoming", { credentials: "include" });
+    const r = await authFetch("/api/friends?type=incoming", { credentials: "include" });
     if (!r.ok) return;
     const { requests } = await r.json();
     social.incoming = new Map((requests || []).map(req => [req.senderId, req]));
@@ -306,7 +360,7 @@ sidebarOverlay.addEventListener("click", closeDrawer);
 
 async function markRead(userId) {
   try {
-    await fetch("/api/messages", {
+    await authFetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -502,7 +556,7 @@ function downscaleImage(file) {
 }
 
 async function uploadImageBase64(imageBase64) {
-  const r = await fetch("/api/file", {
+  const r = await authFetch("/api/file", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -526,7 +580,7 @@ async function pollConversation() {
   const epoch = conversationEpoch;
 
   try {
-    const r = await fetch(
+    const r = await authFetch(
       `/api/messages?with=${encodeURIComponent(selectedUser.userId)}&limit=${MESSAGE_PAGE_LIMIT}`,
       { credentials: "include" }
     );
@@ -569,7 +623,7 @@ async function loadOlder() {
   showOlderLoader(true);
 
   try {
-    const r = await fetch(
+    const r = await authFetch(
       `/api/messages?with=${encodeURIComponent(selectedUser.userId)}&before=${encodeURIComponent(oldestLoadedId)}&limit=${MESSAGE_PAGE_LIMIT}`,
       { credentials: "include" }
     );
@@ -626,7 +680,7 @@ function stopPoll() {
 async function postTyping(typing) {
   if (!selectedUser) return;
   try {
-    await fetch("/api/typing", {
+    await authFetch("/api/typing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -650,7 +704,7 @@ async function sendMessage() {
   await postTyping(false);
 
   try {
-    const r = await fetch("/api/messages", {
+    const r = await authFetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -838,7 +892,7 @@ profileSummary.addEventListener("click", toggleProfile);
 shownameSave.addEventListener("click", async () => {
   const value = String(shownameInput.value).trim();
   try {
-    const r = await fetch("/api/me", {
+    const r = await authFetch("/api/me", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -860,7 +914,7 @@ shownameSave.addEventListener("click", async () => {
 
 profileLogout.addEventListener("click", async () => {
   try {
-    await fetch("/api/logout", {
+    await authFetch("/api/logout", {
       method: "POST",
       credentials: "include",
     });
@@ -933,7 +987,7 @@ function renderBubble() {
     btn.textContent = "Enviar solicitação";
     btn.addEventListener("click", async () => {
       try {
-        const r = await fetch("/api/friends", {
+        const r = await authFetch("/api/friends", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -1023,7 +1077,7 @@ dmMessages.addEventListener(
 
 async function heartbeat() {
   try {
-    await fetch("/api/presence", {
+    await authFetch("/api/presence", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

@@ -125,7 +125,7 @@ form.addEventListener("submit", async (e) => {
 
 (async function checkSession() {
   try {
-    const r = await fetch("/api/me", { credentials: "include" });
+    const r = await fetch("/api/handshake", { credentials: "include" });
     if (r.ok) {
       const data = await r.json();
       if (data.ok) {
