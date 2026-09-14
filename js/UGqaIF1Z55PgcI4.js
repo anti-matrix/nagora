@@ -137,6 +137,11 @@ const profileMessage = document.getElementById("profile-message");
 const profileRequests = document.getElementById("profile-requests");
 const profileRequestsList = document.getElementById("profile-requests-list");
 
+const logoutConfirmOverlay = document.getElementById("logout-confirm-overlay");
+const logoutConfirm = document.getElementById("logout-confirm");
+const logoutConfirmCancel = document.getElementById("logout-confirm-cancel");
+const logoutConfirmOk = document.getElementById("logout-confirm-ok");
+
 const userBubble = document.getElementById("user-bubble");
 const userBubbleClose = document.getElementById("user-bubble-close");
 const userBubbleName = document.getElementById("user-bubble-name");
@@ -1247,8 +1252,26 @@ shownameSave.addEventListener("click", async () => {
   }
 });
 
-profileLogout.addEventListener("click", async () => {
-  if (!confirm("Tem certeza que deseja sair?")) return;
+function openLogoutConfirm() {
+  logoutConfirmOverlay.hidden = false;
+  logoutConfirm.hidden = false;
+  logoutConfirmCancel.focus();
+}
+
+function closeLogoutConfirm() {
+  logoutConfirmOverlay.hidden = true;
+  logoutConfirm.hidden = true;
+}
+
+profileLogout.addEventListener("click", () => {
+  openLogoutConfirm();
+});
+
+logoutConfirmCancel.addEventListener("click", closeLogoutConfirm);
+logoutConfirmOverlay.addEventListener("click", closeLogoutConfirm);
+
+logoutConfirmOk.addEventListener("click", async () => {
+  closeLogoutConfirm();
   try {
     await authFetch("/api/logout", { method: "POST", credentials: "include" });
   } catch (e) {
@@ -1415,6 +1438,12 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+
+  if (!logoutConfirm.hidden) {
+    e.preventDefault();
+    closeLogoutConfirm();
+    return;
+  }
 
   if (contactPanelOpen) {
     e.preventDefault();
