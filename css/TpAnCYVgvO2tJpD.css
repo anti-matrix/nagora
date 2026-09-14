@@ -813,15 +813,20 @@ body {
 }
 
 .profile-logout {
-    background: #222;
-    border: 1px solid #444;
-    color: #fff;
-    padding: 10px;
-    cursor: pointer;
+  background: #222;
+  border: 1px solid #ff4444;
+  color: #fff;
+  padding: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
-
 .profile-logout:hover {
-    background: #333;
+  background: #331111;
+  border-color: #ff6666;
+  color: #ffeeee;
 }
 
 .user-bubble {
@@ -1090,3 +1095,55 @@ body {
 .dm-media-wrap.error img {
   opacity: 0;
 }
+
+.dm-audio-btn.recording {
+  background: #ff4444;
+  border-color: #ff6666;
+  color: #fff;
+}
+.dm-audio-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.dm-audio-wrap audio {
+  width: 220px;
+  height: 36px;
+  flex-shrink: 1;
+}
+.dm-audio-duration {
+  font-size: 0.75rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+@media (max-width: 576px) {
+  .dm-audio-wrap audio { width: 160px; }
+}
+
+.avatar-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: block; }
+.avatar-img-large { width: 80px; height: 80px; }
+.profile-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #fff; cursor: pointer; flex-shrink: 0; }
+.profile-icon img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.profile-avatar { width: 80px; height: 80px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: #fff; cursor: pointer; }
+.profile-avatar img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
+.user-row-avatar { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff; flex-shrink: 0; }
+.user-row-avatar img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.dm-header-avatar { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #fff; flex-shrink: 0; }
+.dm-header-avatar img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+
+.contact-panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 950; }
+.contact-panel-overlay[hidden] { display: none !important; }
+.contact-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; background: #161616; border-left: 1px solid #333; z-index: 960; transform: translateX(100%); transition: transform 0.25s ease-out; display: flex; flex-direction: column; padding: 24px; box-sizing: border-box; }
+.contact-panel.open { transform: translateX(0); }
+.contact-panel[hidden] { display: none !important; }
+.contact-panel-close { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; background: transparent; border: none; color: #fff; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.contact-panel-body { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 40px; text-align: center; }
+.contact-panel-avatar { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; font-size: 5rem; color: #fff; }
+.contact-panel-avatar img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+.contact-panel-name { color: #fff; font-size: 1.3rem; font-weight: 600; }
+.contact-panel-handle { color: #888; font-size: 0.95rem; }
+.contact-panel-status { font-size: 0.85rem; color: #888; }
+.contact-panel-status.online { color: #33ff66; }
+.contact-panel-meta { font-size: 0.85rem; color: #aaa; }
+@media (max-width: 768px) { .contact-panel { width: 100%; border-left: none; } }

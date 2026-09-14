@@ -1,4 +1,6 @@
 import accountHandler from "../lib/handlers/account.js";
+import avatarHandler from "../lib/handlers/avatar.js";
+import contactHandler from "../lib/handlers/contact.js";
 import fileHandler from "../lib/handlers/file.js";
 import friendsHandler from "../lib/handlers/friends.js";
 import geoHandler from "../lib/handlers/geo.js";
@@ -15,6 +17,8 @@ import usersHandler from "../lib/handlers/users.js";
 
 const handlers = {
   account: accountHandler,
+  avatar: avatarHandler,
+  contact: contactHandler,
   file: fileHandler,
   friends: friendsHandler,
   geo: geoHandler,

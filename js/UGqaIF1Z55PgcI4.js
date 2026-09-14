@@ -29,6 +29,19 @@ let usersCache = [];
 let socialInterval = null;
 let badgeInterval = null;
 
+let audioRecorder = null;
+let audioChunks = [];
+let audioRecordStartTs = 0;
+let audioRecordTimer = null;
+let audioRecording = false;
+let audioHold = false;
+const MAX_AUDIO_MS = 5 * 60 * 1000;
+
+let avatarEpoch = 0;
+
+let contactPanelOpen = false;
+let currentContact = null;
+
 // Client token layer (defense-in-depth header auth)
 let clientToken = null;
 let clientTokenExpiry = 0;
@@ -130,10 +143,45 @@ const userBubbleName = document.getElementById("user-bubble-name");
 const userBubbleHandle = document.getElementById("user-bubble-handle");
 const userBubbleActions = document.getElementById("user-bubble-actions");
 
+const dmAudio = document.getElementById("dm-audio");
+const profileIcon = document.querySelector(".profile-icon");
+const profileAvatar = document.querySelector(".profile-avatar");
+const profileAvatarInput = document.getElementById("profile-avatar-input");
+const dmHeader = document.getElementById("dm-header");
+const dmHeaderAvatar = document.getElementById("dm-header-avatar");
+const contactPanel = document.getElementById("contact-panel");
+const contactPanelOverlay = document.getElementById("contact-panel-overlay");
+const contactPanelClose = document.getElementById("contact-panel-close");
+const contactPanelAvatar = document.getElementById("contact-panel-avatar");
+const contactName = document.getElementById("contact-name");
+const contactHandle = document.getElementById("contact-handle");
+const contactStatus = document.getElementById("contact-status");
+const contactFriendsSince = document.getElementById("contact-friends-since");
+const contactFirstConversation = document.getElementById("contact-first-conversation");
+
 const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
 function displayName(u) {
   return u.showname || u.username;
+}
+
+function avatarUrl(userId, hasAvatar) {
+  if (!hasAvatar) return null;
+  return `/api/avatar?userId=${encodeURIComponent(userId)}&v=${avatarEpoch}`;
+}
+
+function setAvatarOrFallback(container, userId, hasAvatar, imgClass) {
+  container.innerHTML = "";
+  if (!hasAvatar) {
+    container.innerHTML = '<i class="bi bi-person-circle"></i>';
+    return;
+  }
+  const img = document.createElement("img");
+  img.src = avatarUrl(userId, true);
+  img.alt = "";
+  img.className = imgClass;
+  img.onerror = () => { container.innerHTML = '<i class="bi bi-person-circle"></i>'; };
+  container.appendChild(img);
 }
 
 async function answerRequest(targetUserId, action) {
@@ -189,7 +237,7 @@ async function initSession() {
       location.href = "index.html";
       return;
     }
-    me = { username: data.username, userId: data.userId, showname: data.showname || null };
+    me = { username: data.username, userId: data.userId, showname: data.showname || null, hasAvatar: data.hasAvatar || false };
     clientToken = data.token;
     clientTokenExpiry = data.expiresAt ? Date.parse(data.expiresAt) : Date.now() + 14 * 60 * 1000;
   } catch (e) {
@@ -271,6 +319,10 @@ function renderUsers(users) {
     row.dataset.username = u.username;
     row.dataset.userid = u.userId;
 
+    const avatarWrap = document.createElement("span");
+    avatarWrap.className = "user-row-avatar";
+    setAvatarOrFallback(avatarWrap, u.userId, u.hasAvatar, "");
+
     const dot = document.createElement("span");
     dot.className = `status-dot ${u.online ? "online" : "offline"}`;
     dot.title = u.online ? "online" : "offline";
@@ -279,6 +331,7 @@ function renderUsers(users) {
     name.className = "username";
     name.textContent = displayName(u);
 
+    row.appendChild(avatarWrap);
     row.appendChild(dot);
     row.appendChild(name);
 
@@ -311,6 +364,7 @@ function selectUser(user) {
   dmPanel.hidden = false;
   dmUsername.textContent = displayName(user);
   dmUsername.dataset.userid = user.userId;
+  setAvatarOrFallback(dmHeaderAvatar, user.userId, user.hasAvatar, "avatar-img");
   dmStatus.className = `status-dot ${user.online ? "online" : "offline"}`;
   dmTyping.textContent = "";
   dmMessages.innerHTML = "";
@@ -378,6 +432,7 @@ function snippet(replyTo) {
       : replyTo.content;
   }
   if (replyTo.mediaType?.startsWith("image/")) return "(imagem)";
+  if (replyTo.mediaType?.startsWith("audio/")) return "(áudio)";
   return "(mídia)";
 }
 
@@ -462,6 +517,21 @@ function createImageBubble(messageId) {
   return wrap;
 }
 
+function createAudioBubble(message) {
+  const wrap = document.createElement("div");
+  wrap.className = "dm-audio-wrap";
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.src = `/api/file?id=${encodeURIComponent(message.id)}`;
+  audio.preload = "metadata";
+  const duration = document.createElement("span");
+  duration.className = "dm-audio-duration";
+  duration.textContent = message.mediaDurationMs ? formatAudioDuration(message.mediaDurationMs) : "0:00";
+  wrap.appendChild(audio);
+  wrap.appendChild(duration);
+  return wrap;
+}
+
 function renderMessages(options = {}) {
   const scrollMode = options.scroll || "bottom";
 
@@ -504,7 +574,11 @@ function renderMessages(options = {}) {
     }
 
     if (m.mediaType) {
-      bubble.appendChild(createImageBubble(m.id));
+      if (m.mediaType.startsWith("audio/")) {
+        bubble.appendChild(createAudioBubble(m));
+      } else {
+        bubble.appendChild(createImageBubble(m.id));
+      }
     }
 
     if (m.content) {
@@ -552,6 +626,146 @@ function showImageError(msg) {
   }, 3000);
 }
 
+function formatAudioDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function cleanupAudioRecording() {
+  if (audioRecorder && audioRecorder.state !== "inactive") {
+    try { audioRecorder.stop(); } catch {}
+  }
+  if (audioRecorder?.stream) {
+    audioRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+  audioRecorder = null;
+  audioChunks = [];
+  clearInterval(audioRecordTimer);
+  audioRecordTimer = null;
+  audioRecording = false;
+  dmAudio.classList.remove("recording");
+  dmAudio.setAttribute("aria-label", "Áudio");
+}
+
+async function startAudioRecording() {
+  if (!selectedUser) return;
+  if (audioRecording) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showImageError("Seu navegador não suporta gravação de áudio.");
+    return;
+  }
+  try {
+    audioRecording = true;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!audioHold) {
+      stream.getTracks().forEach(t => t.stop());
+      cleanupAudioRecording();
+      return;
+    }
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+    if (!mimeType) {
+      stream.getTracks().forEach(t => t.stop());
+      showImageError("Formato de áudio não suportado pelo navegador.");
+      return;
+    }
+    const options = { mimeType };
+    if (mimeType.includes("opus")) {
+      options.audioBitsPerSecond = 24000;
+    }
+    audioRecorder = new MediaRecorder(stream, options);
+    audioChunks = [];
+    audioRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+    audioRecorder.onerror = () => {
+      console.warn("[app] MediaRecorder error");
+      cleanupAudioRecording();
+      showImageError("Falha na gravação de áudio.");
+    };
+    audioRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      cleanupAudioRecording();
+    };
+    audioRecorder.start(100);
+    audioRecordStartTs = Date.now();
+    audioRecording = true;
+    dmAudio.classList.add("recording");
+    dmAudio.setAttribute("aria-label", "Gravando áudio");
+    audioRecordTimer = setInterval(() => {
+      if (Date.now() - audioRecordStartTs >= MAX_AUDIO_MS) stopAudioRecording(true);
+    }, 250);
+  } catch (e) {
+    console.warn("[app] startAudioRecording:", e);
+    showImageError("Não foi possível acessar o microfone.");
+  }
+}
+
+async function stopAudioRecording(send) {
+  audioHold = false;
+  if (!audioRecorder) return;
+  const recorder = audioRecorder;
+  const chunks = audioChunks;
+  const mimeType = recorder.mimeType || "audio/webm";
+  const durationMs = Date.now() - audioRecordStartTs;
+
+  if (recorder.state === "inactive") {
+    cleanupAudioRecording();
+    return;
+  }
+
+  recorder.onstop = () => {
+    recorder.stream?.getTracks().forEach(t => t.stop());
+    cleanupAudioRecording();
+    if (!send) return;
+    if (chunks.length === 0 || durationMs < 500) {
+      showImageError("Áudio muito curto.");
+      return;
+    }
+    const blob = new Blob(chunks, { type: mimeType });
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = String(reader.result).split(",")[1];
+      try {
+        await uploadAudioBase64(base64, durationMs, mimeType);
+      } catch (e) {
+        console.warn("[app] audio upload:", e);
+        showImageError(e.message || "Falha ao enviar áudio.");
+      }
+    };
+    reader.readAsDataURL(blob);
+  };
+  recorder.stop();
+}
+
+async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
+  const r = await authFetch("/api/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      recipientUserId: selectedUser.userId,
+      audioBase64,
+      durationMs,
+      mediaType: mimeType,
+      replyToId: replyingTo?.id,
+    }),
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.error || "upload failed");
+  }
+  clearReply();
+  await pollConversation();
+}
+
 function openLightbox(src) {
   dmLightboxImg.src = src;
   dmLightbox.hidden = false;
@@ -588,6 +802,38 @@ function downscaleImage(file) {
     };
     img.src = url;
   });
+}
+
+function downscaleAvatar(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const size = 128;
+      const scale = size / Math.max(img.naturalWidth, img.naturalHeight);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      resolve(dataUrl.split(",")[1]);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    img.src = url;
+  });
+}
+
+function openAvatarPicker() {
+  profileAvatarInput.click();
 }
 
 async function uploadImageBase64(imageBase64) {
@@ -821,6 +1067,14 @@ dmImageInput.addEventListener("change", async () => {
   }
 });
 
+dmAudio.addEventListener("mousedown", (e) => { if (e.button !== 0) return; e.preventDefault(); audioHold = true; startAudioRecording(); });
+dmAudio.addEventListener("touchstart", (e) => { e.preventDefault(); audioHold = true; startAudioRecording(); }, { passive: false });
+dmAudio.addEventListener("mouseup", () => stopAudioRecording(true));
+dmAudio.addEventListener("mouseleave", () => stopAudioRecording(false));
+dmAudio.addEventListener("touchend", () => stopAudioRecording(true));
+dmAudio.addEventListener("touchcancel", () => stopAudioRecording(false));
+dmAudio.addEventListener("contextmenu", (e) => e.preventDefault());
+
 // Open lightbox when any image inside a bubble is clicked.
 dmMessages.addEventListener("click", (e) => {
   const img = e.target.closest(".dm-bubble img");
@@ -853,6 +1107,8 @@ function renderProfileSummary() {
   profileName.textContent = `@${me.username}`;
   profileHandle.textContent = `@${me.username}`;
   shownameInput.value = me.showname || "";
+  setAvatarOrFallback(profileIcon, me.userId, me.hasAvatar, "avatar-img");
+  setAvatarOrFallback(profileAvatar, me.userId, me.hasAvatar, "avatar-img avatar-img-large");
 }
 
 function toggleProfile() {
@@ -924,6 +1180,50 @@ function showProfileMessage(text, isError = true) {
 
 profileSummary.addEventListener("click", toggleProfile);
 
+profileIcon.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openAvatarPicker();
+});
+
+profileAvatar.addEventListener("click", openAvatarPicker);
+
+profileAvatarInput.addEventListener("change", async () => {
+  const file = profileAvatarInput.files?.[0];
+  profileAvatarInput.value = "";
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showProfileMessage("Apenas imagens são permitidas.");
+    return;
+  }
+
+  try {
+    const imageBase64 = await downscaleAvatar(file);
+    const r = await authFetch("/api/avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ imageBase64 }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showProfileMessage(data.error || "Erro ao enviar foto");
+      return;
+    }
+    avatarEpoch++;
+    me.hasAvatar = true;
+    renderProfileSummary();
+    renderUsers(usersCache);
+    if (selectedUser?.userId === me.userId) {
+      setAvatarOrFallback(dmHeaderAvatar, me.userId, true, "avatar-img");
+    }
+    showProfileMessage("Foto atualizada", false);
+  } catch (e) {
+    console.warn("[app] avatar upload:", e);
+    showProfileMessage("Erro ao enviar foto");
+  }
+});
+
 shownameSave.addEventListener("click", async () => {
   const value = String(shownameInput.value).trim();
   try {
@@ -948,11 +1248,9 @@ shownameSave.addEventListener("click", async () => {
 });
 
 profileLogout.addEventListener("click", async () => {
+  if (!confirm("Tem certeza que deseja sair?")) return;
   try {
-    await authFetch("/api/logout", {
-      method: "POST",
-      credentials: "include",
-    });
+    await authFetch("/api/logout", { method: "POST", credentials: "include" });
   } catch (e) {
     console.warn("[app] logout:", e);
   }
@@ -1041,6 +1339,71 @@ function renderBubble() {
 
 userBubbleClose.addEventListener("click", closeBubble);
 
+// Contact panel
+function openContactPanel() {
+  if (!selectedUser) return;
+  closeBubble();
+  closeDrawer();
+  currentContact = selectedUser;
+  contactPanelOpen = true;
+  contactPanel.hidden = false;
+  contactPanelOverlay.hidden = false;
+  requestAnimationFrame(() => {
+    contactPanel.classList.add("open");
+  });
+  populateContactPanel();
+  setTimeout(() => contactPanelClose.focus(), 0);
+}
+
+function closeContactPanel() {
+  contactPanel.classList.remove("open");
+  contactPanelOpen = false;
+  currentContact = null;
+  setTimeout(() => {
+    contactPanel.hidden = true;
+    contactPanelOverlay.hidden = true;
+  }, 260);
+}
+
+function populateContactPanel() {
+  if (!selectedUser) return;
+  contactName.textContent = displayName(selectedUser);
+  contactHandle.textContent = `@${selectedUser.username}`;
+  contactStatus.textContent = selectedUser.online ? "online" : "offline";
+  contactStatus.className = `contact-panel-status ${selectedUser.online ? "online" : ""}`;
+  setAvatarOrFallback(contactPanelAvatar, selectedUser.userId, selectedUser.hasAvatar, "");
+
+  const targetId = selectedUser.userId;
+  authFetch(`/api/contact?targetUserId=${encodeURIComponent(selectedUser.userId)}`, { credentials: "include" })
+    .then(async (r) => {
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!currentContact || currentContact.userId !== targetId) return;
+      contactName.textContent = data.showname || data.username || displayName(selectedUser);
+      contactHandle.textContent = data.username ? `@${data.username}` : `@${selectedUser.username}`;
+      if (data.online != null) {
+        contactStatus.textContent = data.online ? "online" : "offline";
+        contactStatus.className = `contact-panel-status ${data.online ? "online" : ""}`;
+      }
+      contactFriendsSince.textContent = data.friendsSince
+        ? `Amigos desde ${new Date(data.friendsSince).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+        : "";
+      contactFirstConversation.textContent = data.firstConversationAt
+        ? `Primeira conversa em ${new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+        : "";
+    })
+    .catch((e) => console.warn("[app] contact info:", e));
+}
+
+dmHeader.addEventListener("click", (e) => {
+  if (e.target.closest("button")) return;
+  e.stopPropagation();
+  openContactPanel();
+});
+
+contactPanelClose.addEventListener("click", closeContactPanel);
+contactPanelOverlay.addEventListener("click", closeContactPanel);
+
 // Close bubble when clicking outside.
 document.addEventListener("click", (e) => {
   if (!bubbleUser) return;
@@ -1052,6 +1415,12 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+
+  if (contactPanelOpen) {
+    e.preventDefault();
+    closeContactPanel();
+    return;
+  }
 
   if (bubbleUser) {
     e.preventDefault();
@@ -1128,6 +1497,10 @@ document.addEventListener("visibilitychange", () => {
   } else if (selectedUser) {
     startPoll();
   }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && audioRecording) stopAudioRecording(false);
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
