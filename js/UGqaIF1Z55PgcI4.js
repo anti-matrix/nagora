@@ -34,7 +34,7 @@ let audioChunks = [];
 let audioRecordStartTs = 0;
 let audioRecordTimer = null;
 let audioRecording = false;
-let audioHold = false;
+let recordingIntent = false;
 const MAX_AUDIO_MS = 5 * 60 * 1000;
 
 let avatarEpoch = 0;
@@ -356,7 +356,7 @@ function handleUserRowClick(user) {
   }
 }
 
-function selectUser(user) {
+async function selectUser(user) {
   closeBubble();
   for (const el of userList.querySelectorAll(".user-row")) {
     el.classList.remove("active");
@@ -383,6 +383,8 @@ function selectUser(user) {
   conversationEpoch++;
 
   markRead(user.userId);
+  stopPoll();
+  await pollConversation();
   startPoll();
   closeDrawer();
 }
@@ -650,23 +652,23 @@ function cleanupAudioRecording() {
   clearInterval(audioRecordTimer);
   audioRecordTimer = null;
   audioRecording = false;
+  recordingIntent = false;
   dmAudio.classList.remove("recording");
   dmAudio.setAttribute("aria-label", "Áudio");
 }
 
 async function startAudioRecording() {
   if (!selectedUser) return;
-  if (audioRecording) return;
+  if (recordingIntent) return;
   if (!navigator.mediaDevices?.getUserMedia) {
     showImageError("Seu navegador não suporta gravação de áudio.");
     return;
   }
+  recordingIntent = true;
   try {
-    audioRecording = true;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    if (!audioHold) {
+    if (!recordingIntent) {
       stream.getTracks().forEach(t => t.stop());
-      cleanupAudioRecording();
       return;
     }
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -678,6 +680,7 @@ async function startAudioRecording() {
           : "";
     if (!mimeType) {
       stream.getTracks().forEach(t => t.stop());
+      recordingIntent = false;
       showImageError("Formato de áudio não suportado pelo navegador.");
       return;
     }
@@ -695,10 +698,6 @@ async function startAudioRecording() {
       cleanupAudioRecording();
       showImageError("Falha na gravação de áudio.");
     };
-    audioRecorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      cleanupAudioRecording();
-    };
     audioRecorder.start(100);
     audioRecordStartTs = Date.now();
     audioRecording = true;
@@ -708,13 +707,14 @@ async function startAudioRecording() {
       if (Date.now() - audioRecordStartTs >= MAX_AUDIO_MS) stopAudioRecording(true);
     }, 250);
   } catch (e) {
+    recordingIntent = false;
     console.warn("[app] startAudioRecording:", e);
     showImageError("Não foi possível acessar o microfone.");
   }
 }
 
-async function stopAudioRecording(send) {
-  audioHold = false;
+function stopAudioRecording(send) {
+  recordingIntent = false;
   if (!audioRecorder) return;
   const recorder = audioRecorder;
   const chunks = audioChunks;
@@ -1072,12 +1072,14 @@ dmImageInput.addEventListener("change", async () => {
   }
 });
 
-dmAudio.addEventListener("mousedown", (e) => { if (e.button !== 0) return; e.preventDefault(); audioHold = true; startAudioRecording(); });
-dmAudio.addEventListener("touchstart", (e) => { e.preventDefault(); audioHold = true; startAudioRecording(); }, { passive: false });
-dmAudio.addEventListener("mouseup", () => stopAudioRecording(true));
-dmAudio.addEventListener("mouseleave", () => stopAudioRecording(false));
-dmAudio.addEventListener("touchend", () => stopAudioRecording(true));
-dmAudio.addEventListener("touchcancel", () => stopAudioRecording(false));
+dmAudio.addEventListener("click", () => {
+  if (!selectedUser) return;
+  if (recordingIntent || audioRecording) {
+    stopAudioRecording(true);
+  } else {
+    startAudioRecording();
+  }
+});
 dmAudio.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // Open lightbox when any image inside a bubble is clicked.
