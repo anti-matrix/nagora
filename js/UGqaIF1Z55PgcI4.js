@@ -161,6 +161,7 @@ const contactPanelAvatar = document.getElementById("contact-panel-avatar");
 const contactName = document.getElementById("contact-name");
 const contactHandle = document.getElementById("contact-handle");
 const contactStatus = document.getElementById("contact-status");
+const contactLastSeen = document.getElementById("contact-last-seen");
 const contactFriendsSince = document.getElementById("contact-friends-since");
 const contactFirstConversation = document.getElementById("contact-first-conversation");
 
@@ -539,6 +540,35 @@ function createAudioBubble(message) {
   return wrap;
 }
 
+function formatDayLabel(isoString) {
+  const d = new Date(isoString);
+  const now = new Date();
+
+  function isSameDay(a, b) {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  if (isSameDay(d, now)) return "Hoje";
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(d, yesterday)) return "Ontem";
+
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
+  }
+
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 function renderMessages(options = {}) {
   const scrollMode = options.scroll || "bottom";
 
@@ -553,7 +583,20 @@ function renderMessages(options = {}) {
 
   dmMessages.innerHTML = "";
 
+  let previousDayKey = null;
+
   for (const m of messageList) {
+    const msgDate = new Date(m.createdAt);
+    const dayKey = `${msgDate.getFullYear()}-${msgDate.getMonth()}-${msgDate.getDate()}`;
+
+    if (dayKey !== previousDayKey) {
+      const separator = document.createElement("div");
+      separator.className = "dm-day-separator";
+      separator.textContent = formatDayLabel(m.createdAt);
+      dmMessages.appendChild(separator);
+      previousDayKey = dayKey;
+    }
+
     const bubble = document.createElement("div");
     bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}${m.mediaType ? " media" : ""}`;
     bubble.dataset.id = m.id;
@@ -1397,6 +1440,7 @@ function populateContactPanel() {
   contactStatus.textContent = selectedUser.online ? "online" : "offline";
   contactStatus.className = `contact-panel-status ${selectedUser.online ? "online" : ""}`;
   setAvatarOrFallback(contactPanelAvatar, selectedUser.userId, selectedUser.hasAvatar, "");
+  contactLastSeen.textContent = "";
 
   const targetId = selectedUser.userId;
   authFetch(`/api/contact?targetUserId=${encodeURIComponent(selectedUser.userId)}`, { credentials: "include" })
@@ -1415,6 +1459,9 @@ function populateContactPanel() {
         : "";
       contactFirstConversation.textContent = data.firstConversationAt
         ? `Primeira conversa em ${new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+        : "";
+      contactLastSeen.textContent = data.lastSeenAt
+        ? `Visto por último em ${formatDayLabel(data.lastSeenAt)}`
         : "";
     })
     .catch((e) => console.warn("[app] contact info:", e));
