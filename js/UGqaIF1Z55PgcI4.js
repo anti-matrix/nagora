@@ -1461,7 +1461,7 @@ function populateContactPanel() {
         ? `Primeira conversa em ${new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
         : "";
       contactLastSeen.textContent = data.lastSeenAt
-        ? `Visto por último em ${formatDayLabel(data.lastSeenAt)}`
+        ? `Visto por último em ${formatDayLabel(data.lastSeenAt)} às ${new Date(data.lastSeenAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
         : "";
     })
     .catch((e) => console.warn("[app] contact info:", e));
