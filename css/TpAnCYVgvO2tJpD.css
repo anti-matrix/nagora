@@ -512,7 +512,7 @@ body {
 
 @media (hover: hover) {
   .dm-messages:hover {
-    outline: 1px solid #888;
+    outline: 1px solid #555;
     outline-offset: -1px;
   }
 }
