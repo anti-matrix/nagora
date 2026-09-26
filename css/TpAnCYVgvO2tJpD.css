@@ -193,6 +193,7 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .dm-panel {
@@ -784,12 +785,6 @@ body {
     color: #fff;
 }
 
-.profile-handle {
-    text-align: center;
-    color: #888;
-    font-size: 0.9rem;
-}
-
 .profile-pfp-btn {
   align-self: center;
   background: transparent;
@@ -855,6 +850,10 @@ body {
   .profile-pfp-btn {
     min-height: 44px;
     padding: 0 12px;
+  }
+  .profile-showname-display button,
+  .profile-showname-row button {
+    min-height: 44px;
   }
 }
 
