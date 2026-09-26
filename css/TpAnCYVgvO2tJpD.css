@@ -292,7 +292,38 @@ body {
   font-size: 0.7rem;
   color: #888;
   margin-top: 4px;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.dm-meta-time {
+  order: 0;
+}
+
+.dm-status-icon {
+  order: 1;
+  font-size: 0.75rem;
+  min-width: 14px;
+  text-align: center;
+  color: #aaa;
+}
+
+.dm-status-icon.sending {
+  opacity: 0.8;
+}
+
+.dm-status-icon.sent {
+  color: #aaa;
+}
+
+.dm-status-icon.viewed {
+  color: #4fc3f7;
+}
+
+.dm-status-icon.failed {
+  color: #ff5555;
 }
 
 .dm-composer {
@@ -318,9 +349,17 @@ body {
 
 .dm-input:focus {
   background: #0d0d0d;
-  border-color: #888;
   color: #fff;
   outline: none;
+}
+
+.dm-input:hover {
+  border-color: #888;
+}
+
+.dm-input:focus-visible {
+  outline: 2px solid #666;
+  outline-offset: 2px;
 }
 
 .dm-attach-wrap,

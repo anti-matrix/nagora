@@ -11,6 +11,7 @@ let oldestLoadedId = null;
 let noMoreOlder = false;
 let loadingOlder = false;
 let conversationEpoch = 0;
+let pendingIdSeq = 0;
 
 let typingDebounceTimer = null;
 let lastTypingPost = 0;
@@ -569,6 +570,66 @@ function formatDayLabel(isoString) {
   });
 }
 
+function isServerId(id) {
+  return typeof id === "number" && Number.isFinite(id) && id > 0;
+}
+
+function maxServerId(list) {
+  let max = null;
+  for (const m of list) {
+    if (isServerId(m.id) && (max == null || m.id > max)) max = m.id;
+  }
+  return max;
+}
+
+function sortMessages() {
+  messageList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function makeTempMessage(content, replyToId) {
+  const replyTo = replyingTo ? { ...replyingTo } : null;
+  return {
+    id: `tmp-${Date.now()}-${++pendingIdSeq}`,
+    temp: true,
+    failed: false,
+    senderId: me.userId,
+    recipientId: selectedUser.userId,
+    content,
+    createdAt: new Date().toISOString(),
+    readAt: null,
+    mediaType: null,
+    mediaWidth: null,
+    mediaHeight: null,
+    mediaDurationMs: null,
+    replyTo,
+    replyToId: replyToId ?? null,
+  };
+}
+
+function replaceTempMessage(tempId, serverMsg) {
+  messageList = messageList.filter((m) => m.id !== tempId);
+  const exists = messageList.some((m) => isServerId(m.id) && m.id === serverMsg.id);
+  if (!exists) {
+    messageList.push(serverMsg);
+  }
+  sortMessages();
+  lastMessageId = maxServerId(messageList);
+}
+
+function getStatusIconInfo(m) {
+  if (m.senderId !== me.userId) return null;
+  if (m.temp) {
+    if (m.failed) {
+      return { cls: "bi-exclamation-circle", label: "Falha ao enviar", key: "failed" };
+    }
+    return { cls: "bi-clock", label: "Enviando", key: "sending" };
+  }
+  if (m.readAt) {
+    return { cls: "bi-check-all", label: "Visualizada", key: "viewed" };
+  }
+  return { cls: "bi-check", label: "Enviada", key: "sent" };
+}
+
 function renderMessages(options = {}) {
   const scrollMode = options.scroll || "bottom";
 
@@ -598,7 +659,8 @@ function renderMessages(options = {}) {
     }
 
     const bubble = document.createElement("div");
-    bubble.className = `dm-bubble ${m.senderId === me.userId ? "own" : "other"}${m.mediaType ? " media" : ""}`;
+    const isOwn = m.senderId === me.userId;
+    bubble.className = `dm-bubble ${isOwn ? "own" : "other"}${m.mediaType ? " media" : ""}`;
     bubble.dataset.id = m.id;
 
     if (m.replyTo) {
@@ -639,10 +701,24 @@ function renderMessages(options = {}) {
 
     const meta = document.createElement("div");
     meta.className = "dm-meta";
-    meta.textContent = new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+
+    const time = document.createElement("span");
+    time.className = "dm-meta-time";
+    time.textContent = new Date(m.createdAt).toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
     });
+    meta.appendChild(time);
+
+    const status = getStatusIconInfo(m);
+    if (status) {
+      const icon = document.createElement("i");
+      icon.className = `bi ${status.cls} dm-status-icon dm-status-${status.key}`;
+      icon.setAttribute("role", "img");
+      icon.setAttribute("aria-label", status.label);
+      icon.setAttribute("title", status.label);
+      meta.appendChild(icon);
+    }
 
     bubble.appendChild(meta);
 
@@ -924,15 +1000,48 @@ async function pollConversation() {
       messageList = fetched.slice();
       if (messageList.length > 0) {
         oldestLoadedId = messageList[0].id;
-        lastMessageId = messageList[messageList.length - 1].id;
+        lastMessageId = maxServerId(messageList);
       }
       noMoreOlder = fetched.length < MESSAGE_PAGE_LIMIT;
       renderMessages({ scroll: "bottom" });
     } else {
-      const newMessages = fetched.filter((m) => m.id > lastMessageId);
+      const indexById = new Map();
+      for (let i = 0; i < messageList.length; i++) {
+        if (isServerId(messageList[i].id)) {
+          indexById.set(messageList[i].id, i);
+        }
+      }
+
+      let readAtChanged = false;
+      const newMessages = [];
+
+      for (const m of fetched) {
+        const idx = indexById.get(m.id);
+        if (idx !== undefined) {
+          if (messageList[idx].readAt !== m.readAt) {
+            messageList[idx].readAt = m.readAt;
+            readAtChanged = true;
+          }
+        } else if (isServerId(m.id) && (lastMessageId == null || m.id > lastMessageId)) {
+          newMessages.push(m);
+        }
+      }
+
       if (newMessages.length > 0) {
         messageList = messageList.concat(newMessages);
-        lastMessageId = messageList[messageList.length - 1].id;
+        sortMessages();
+        lastMessageId = maxServerId(messageList);
+      }
+
+      if (oldestLoadedId == null) {
+        const oldest = messageList.find(isServerId);
+        if (oldest) {
+          oldestLoadedId = oldest.id;
+          noMoreOlder = fetched.length < MESSAGE_PAGE_LIMIT;
+        }
+      }
+
+      if (readAtChanged || newMessages.length > 0) {
         renderMessages({ scroll: "auto" });
       }
     }
@@ -1028,11 +1137,20 @@ async function sendMessage() {
   const content = String(dmInput.value).trim();
   if (!content) return;
 
+  const epoch = conversationEpoch;
+  const originalContent = content;
+  const originalReply = replyingTo ? { ...replyingTo } : null;
+
+  const tempMsg = makeTempMessage(content, replyingTo?.id);
+  messageList.push(tempMsg);
+  renderMessages({ scroll: "bottom" });
+
   dmInput.value = "";
   clearTimeout(typingDebounceTimer);
-  await postTyping(false);
 
   try {
+    await postTyping(false);
+
     const r = await authFetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1048,10 +1166,33 @@ async function sendMessage() {
       const data = await r.json().catch(() => ({}));
       throw new Error(data.error || "send failed");
     }
-    await pollConversation();
+
+    const data = await r.json();
+    const serverMsg = data?.message;
+    if (!serverMsg?.id) throw new Error("send returned no message");
+
+    if (epoch !== conversationEpoch) return;
+
+    replaceTempMessage(tempMsg.id, serverMsg);
+    renderMessages({ scroll: "bottom" });
     clearReply();
   } catch (e) {
     console.warn("[app] sendMessage:", e);
+
+    if (epoch !== conversationEpoch) return;
+
+    const idx = messageList.findIndex((m) => m.id === tempMsg.id);
+    if (idx !== -1) {
+      messageList[idx].failed = true;
+    }
+
+    dmInput.value = originalContent;
+    if (originalReply) {
+      replyingTo = originalReply;
+      renderReplyBar();
+    }
+
+    renderMessages({ scroll: "auto" });
   }
 }
 
