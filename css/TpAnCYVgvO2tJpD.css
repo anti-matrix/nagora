@@ -350,13 +350,9 @@ body {
 
 .dm-input:focus {
   background: #0d0d0d;
+  border-color: #888;
   color: #fff;
   outline: none;
-}
-
-.dm-input:focus-visible {
-  outline: 2px solid #666;
-  outline-offset: 2px;
 }
 
 .dm-attach-wrap,
@@ -508,13 +504,6 @@ body {
 .dm-messages:focus-visible {
   outline: 1px solid #888;
   outline-offset: -1px;
-}
-
-@media (hover: hover) {
-  .dm-messages:hover {
-    outline: 1px solid #555;
-    outline-offset: -1px;
-  }
 }
 
 .dm-menu-btn {
