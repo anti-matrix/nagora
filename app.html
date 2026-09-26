@@ -17,7 +17,7 @@
     <div class="app-shell">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <span>Pessoas</span>
+                <span>USUÁRIOS</span>
                 <button type="button" id="search-toggle" class="search-toggle" aria-label="Buscar usuários">
                     <i class="bi bi-search"></i>
                 </button>
@@ -35,11 +35,16 @@
                 </button>
                 <div class="profile-body" id="profile-body" hidden>
                     <div class="profile-avatar"><i class="bi bi-person-circle"></i></div>
-                    <div class="profile-handle" id="profile-handle">@username</div>
-                    <label for="showname-input" class="profile-label">Nome de exibição</label>
-                    <div class="profile-showname-row">
+                    <button type="button" class="profile-pfp-btn" id="profile-pfp-btn" aria-label="Foto de perfil">Adicionar PFP</button>
+                    <label class="profile-label">Nome de exibição</label>
+                    <div class="profile-showname-display" id="profile-showname-display">
+                        <span class="profile-showname-value empty" id="profile-showname-value">—</span>
+                        <button type="button" id="showname-edit">Adicionar</button>
+                    </div>
+                    <div class="profile-showname-row" id="showname-edit-row" hidden>
                         <input type="text" id="showname-input" maxlength="20" placeholder="Como quer ser chamado?" aria-label="Nome de exibição" />
                         <button type="button" id="showname-save">Salvar</button>
+                        <button type="button" id="showname-cancel">Cancelar</button>
                     </div>
                     <input type="file" id="profile-avatar-input" accept="image/*" hidden />
                     <div class="profile-message" id="profile-message"></div>
@@ -47,7 +52,7 @@
                         <div class="profile-requests-heading">Solicitações recebidas</div>
                         <div class="profile-requests-list" id="profile-requests-list"></div>
                     </div>
-                    <button type="button" class="profile-logout" id="profile-logout"><i class="bi bi-power"></i> Sair</button>
+                    <button type="button" class="profile-logout" id="profile-logout" aria-label="Sair" title="Sair"><i class="bi bi-power"></i></button>
                 </div>
             </div>
         </aside>
@@ -92,6 +97,18 @@
                 </div>
             </div>
         </main>
+        <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
+            <button type="button" class="contact-panel-close" id="contact-panel-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
+            <div class="contact-panel-body">
+                <div class="contact-panel-avatar" id="contact-panel-avatar"><i class="bi bi-person-circle"></i></div>
+                <div class="contact-panel-name" id="contact-name"></div>
+                <div class="contact-panel-handle" id="contact-handle"></div>
+                <div class="contact-panel-status" id="contact-status"></div>
+                <div class="contact-panel-meta" id="contact-last-seen"></div>
+                <div class="contact-panel-meta" id="contact-friends-since"></div>
+                <div class="contact-panel-meta" id="contact-first-conversation"></div>
+            </div>
+        </aside>
     </div>
 
     <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
@@ -110,18 +127,6 @@
     </div>
 
     <div class="contact-panel-overlay" id="contact-panel-overlay" hidden></div>
-    <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
-        <button type="button" class="contact-panel-close" id="contact-panel-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
-        <div class="contact-panel-body">
-            <div class="contact-panel-avatar" id="contact-panel-avatar"><i class="bi bi-person-circle"></i></div>
-            <div class="contact-panel-name" id="contact-name"></div>
-            <div class="contact-panel-handle" id="contact-handle"></div>
-            <div class="contact-panel-status" id="contact-status"></div>
-            <div class="contact-panel-meta" id="contact-last-seen"></div>
-            <div class="contact-panel-meta" id="contact-friends-since"></div>
-            <div class="contact-panel-meta" id="contact-first-conversation"></div>
-        </div>
-    </aside>
 
     <div class="logout-confirm-overlay" id="logout-confirm-overlay" hidden></div>
     <div class="logout-confirm" id="logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title" hidden>

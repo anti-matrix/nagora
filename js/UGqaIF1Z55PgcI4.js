@@ -128,11 +128,16 @@ const searchInput = document.getElementById("search-input");
 const profileCard = document.getElementById("profile-card");
 const profileSummary = document.getElementById("profile-summary");
 const profileName = document.getElementById("profile-name");
-const profileHandle = document.getElementById("profile-handle");
+const profilePfpBtn = document.getElementById("profile-pfp-btn");
 const profileBody = document.getElementById("profile-body");
 const profileBadge = document.getElementById("profile-badge");
 const shownameInput = document.getElementById("showname-input");
 const shownameSave = document.getElementById("showname-save");
+const shownameEdit = document.getElementById("showname-edit");
+const shownameCancel = document.getElementById("showname-cancel");
+const shownameDisplay = document.getElementById("profile-showname-display");
+const shownameValue = document.getElementById("profile-showname-value");
+const shownameEditRow = document.getElementById("showname-edit-row");
 const profileLogout = document.getElementById("profile-logout");
 const profileMessage = document.getElementById("profile-message");
 const profileRequests = document.getElementById("profile-requests");
@@ -1293,13 +1298,38 @@ searchInput.addEventListener("input", () => {
 });
 
 // Profile accordion
+function enterShownameEdit() {
+  shownameInput.value = me.showname || "";
+  shownameDisplay.hidden = true;
+  shownameEditRow.hidden = false;
+  shownameInput.focus();
+}
+
+function exitShownameEdit() {
+  shownameEditRow.hidden = true;
+  shownameDisplay.hidden = false;
+}
+
 function renderProfileSummary() {
   if (!me) return;
   profileName.textContent = `@${me.username}`;
-  profileHandle.textContent = `@${me.username}`;
   shownameInput.value = me.showname || "";
   setAvatarOrFallback(profileIcon, me.userId, me.hasAvatar, "avatar-img");
   setAvatarOrFallback(profileAvatar, me.userId, me.hasAvatar, "avatar-img avatar-img-large");
+
+  profilePfpBtn.textContent = me.hasAvatar ? "Editar PFP" : "Adicionar PFP";
+
+  if (me.showname) {
+    shownameValue.textContent = me.showname;
+    shownameValue.classList.remove("empty");
+    shownameEdit.textContent = "Editar";
+  } else {
+    shownameValue.textContent = "—";
+    shownameValue.classList.add("empty");
+    shownameEdit.textContent = "Adicionar";
+  }
+
+  exitShownameEdit();
 }
 
 function toggleProfile() {
@@ -1377,6 +1407,9 @@ profileIcon.addEventListener("click", (e) => {
 });
 
 profileAvatar.addEventListener("click", openAvatarPicker);
+profilePfpBtn.addEventListener("click", openAvatarPicker);
+shownameEdit.addEventListener("click", enterShownameEdit);
+shownameCancel.addEventListener("click", exitShownameEdit);
 
 profileAvatarInput.addEventListener("change", async () => {
   const file = profileAvatarInput.files?.[0];
@@ -1432,6 +1465,7 @@ shownameSave.addEventListener("click", async () => {
     me.showname = data.showname || null;
     renderProfileSummary();
     showProfileMessage("Salvo", false);
+    exitShownameEdit();
   } catch (e) {
     console.warn("[app] save showname:", e);
     showProfileMessage("Erro ao salvar");
@@ -1557,9 +1591,13 @@ function openContactPanel() {
   contactPanelOpen = true;
   contactPanel.hidden = false;
   contactPanelOverlay.hidden = false;
-  requestAnimationFrame(() => {
-    contactPanel.classList.add("open");
-  });
+  if (window.innerWidth <= 768) {
+    requestAnimationFrame(() => {
+      contactPanel.classList.add("open");
+    });
+  } else {
+    contactPanel.classList.remove("open");
+  }
   populateContactPanel();
   setTimeout(() => contactPanelClose.focus(), 0);
 }
@@ -1568,10 +1606,15 @@ function closeContactPanel() {
   contactPanel.classList.remove("open");
   contactPanelOpen = false;
   currentContact = null;
-  setTimeout(() => {
+  if (window.innerWidth <= 768) {
+    setTimeout(() => {
+      contactPanel.hidden = true;
+      contactPanelOverlay.hidden = true;
+    }, 260);
+  } else {
     contactPanel.hidden = true;
     contactPanelOverlay.hidden = true;
-  }, 260);
+  }
 }
 
 function populateContactPanel() {

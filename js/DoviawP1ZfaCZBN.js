@@ -21,6 +21,7 @@ const confirmGroup = document.getElementById("confirm-group");
 const confirmPassword = document.getElementById("confirm-password");
 const submitBtn = document.getElementById("submit-btn");
 const message   = document.getElementById("message");
+const authHeading = document.getElementById("auth-heading");
 
 let mode = "login";
 
@@ -31,11 +32,13 @@ function setMode(next) {
     tabSignup.classList.remove("active");
     confirmGroup.classList.add("hidden-field");
     submitBtn.textContent = "Entrar";
+    authHeading.textContent = "Faça login";
   } else {
     tabSignup.classList.add("active");
     tabLogin.classList.remove("active");
     confirmGroup.classList.remove("hidden-field");
     submitBtn.textContent = "Criar conta";
+    authHeading.textContent = "Criar sua conta";
   }
   message.textContent = "";
   message.className = "mb-3 small";
