@@ -11,3 +11,6 @@ __pycache__/
 
 # opencode project memory — local only, never commit
 .opencode/
+
+# Test scripts
+*.test.mjs
