@@ -700,6 +700,7 @@ function renderMessages(options = {}) {
 
     if (m.content) {
       const text = document.createElement("div");
+      text.className = "dm-bubble-text";
       appendLinkifiedText(m.content, text);
       bubble.appendChild(text);
     }
