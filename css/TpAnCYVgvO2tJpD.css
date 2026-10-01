@@ -237,6 +237,10 @@ body {
 
 .username {
     color: #fff;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (max-width: 576px) {

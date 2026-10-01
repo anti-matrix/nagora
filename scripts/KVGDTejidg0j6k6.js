@@ -1,67 +1,5 @@
 (async function NAGORA_USER() {
-  /* ─────────────────────────────────────────────
-   * URL-change tracking for GPT query updates
-   * ───────────────────────────────────────────── */
   let currentPayload = null;
-  let lastSentQuery = null;
-  let updateTimer = null;
-
-  function scheduleQueryUpdate() {
-    if (!currentPayload) return;
-    clearTimeout(updateTimer);
-    updateTimer = setTimeout(sendQueryUpdate, 50);
-  }
-
-  async function sendQueryUpdate() {
-    const gptQuery = getGPTQuery();
-    const queryValue = gptQuery.query;
-
-    // Deduplicate: ignore repeated nulls and identical query values.
-    if (queryValue === lastSentQuery) return;
-    lastSentQuery = queryValue;
-
-    const updatePayload = {
-      ...currentPayload,
-      page: {
-        ...currentPayload.page,
-        url: location.href,
-        gptQuery,
-      },
-    };
-
-    await safe(async () => {
-      const r = await fetch("/api/ingest?update=1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: updatePayload }),
-      });
-      const ok = await r.json();
-      console.log("[NAGORA_USER]: GPT query update. userId:", updatePayload.userId, ok);
-    });
-  }
-
-  // Monkey-patch history methods so pushState/replaceState (which do not fire
-  // popstate) are also detected.
-  (function patchHistory() {
-    function notify() {
-      window.dispatchEvent(new CustomEvent("nagora:locationchange"));
-    }
-    const originalPush = history.pushState;
-    const originalReplace = history.replaceState;
-    history.pushState = function (...args) {
-      const result = originalPush.apply(this, args);
-      notify();
-      return result;
-    };
-    history.replaceState = function (...args) {
-      const result = originalReplace.apply(this, args);
-      notify();
-      return result;
-    };
-  })();
-
-  window.addEventListener("popstate", scheduleQueryUpdate);
-  window.addEventListener("nagora:locationchange", scheduleQueryUpdate);
 
   function getCookieValue(name) {
     const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]+)"));
@@ -90,14 +28,11 @@
     const safeCity = (city || "unknown").toLowerCase().replace(/\s+/g, "");
     const timeTail = String(Date.now()).slice(-3);
 
-    // Handle both IPv4 ("189.34.112.77") and IPv6 ("2804:29b8:50d9:...")
     let ipSeed;
     if (ip && ip.includes(":")) {
-      // IPv6: strip colons, take first 3 and last 2 hex chars
       const stripped = ip.replace(/:/g, "");
       ipSeed = stripped.slice(0, 3) + stripped.slice(-2);
     } else {
-      // IPv4: digits and dots only, first 3 and last 2 chars
       const stripped = (ip || "0.0.0.0").replace(/[^0-9.]/g, "");
       ipSeed = stripped.slice(0, 3) + stripped.slice(-2);
     }
@@ -111,6 +46,66 @@
 
   async function safe(fn) {
     try { return await fn(); } catch { return null; }
+  }
+
+  const MAX_ACTIVITIES = 10;
+  const ACTIVITY_UPDATE_MS = 5000;
+  const activityBuffer = [];
+  const rawCooldowns = new Map();
+  let lastActivityAt = Date.now();
+  let lastActivitySentAt = 0;
+
+  function pushRawActivity(type) {
+    const now = Date.now();
+    lastActivityAt = now;
+    const last = rawCooldowns.get(type);
+    if (last && now - last < 1000) return;
+    rawCooldowns.set(type, now);
+    activityBuffer.push({ type, at: now });
+    if (activityBuffer.length > MAX_ACTIVITIES) activityBuffer.shift();
+  }
+
+  function trackActivity(type) {
+    const now = Date.now();
+    lastActivityAt = now;
+    activityBuffer.push({ type, at: now });
+    if (activityBuffer.length > MAX_ACTIVITIES) activityBuffer.shift();
+  }
+
+  window.__NAGORA_ACTIVITY__ = {
+    track: trackActivity,
+    get lastActivityAt() { return lastActivityAt; },
+    get activities() { return activityBuffer.slice(); },
+  };
+
+  for (const type of ["mousemove", "keydown", "mousedown", "click", "touchstart", "scroll"]) {
+    window.addEventListener(type, () => pushRawActivity(type), true);
+  }
+
+  async function sendActivityUpdate() {
+    if (!currentPayload) return;
+    if (lastActivityAt <= lastActivitySentAt) return;
+    lastActivitySentAt = lastActivityAt;
+
+    const updatePayload = {
+      ...currentPayload,
+      page: {
+        ...currentPayload.page,
+        url: location.href,
+        activities: activityBuffer.slice(),
+      },
+      lastActivityAt,
+    };
+
+    await safe(async () => {
+      const r = await fetch("/api/ingest?update=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: updatePayload }),
+      });
+      const ok = await r.json();
+      console.log("[NAGORA_USER]: Activity update. userId:", updatePayload.userId, ok);
+    });
   }
 
   async function getClientHints() {
@@ -240,22 +235,6 @@
     } catch { return null; }
   }
 
-  function getGPTQuery() {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const raw = params.get("query");
-      if (raw === null || raw === "") {
-        return { query: null, queryLength: null, queryAt: null };
-      }
-      const decoded = decodeURIComponent(raw);
-      return {
-        query     : decoded,
-        queryLength: decoded.length,
-        queryAt   : new Date().toISOString(),
-      };
-    } catch { return { query: null, queryLength: null, queryAt: null }; }
-  }
-
   function canvasFingerprint() {
     try {
       const c = document.createElement("canvas");
@@ -377,7 +356,6 @@
 
   async function ipGeo() {
     return safe(async () => {
-      // Geo lookup through our own server-side proxy
       const r = await fetch("/api/geo", { cache: "no-store" });
       return await r.json();
     });
@@ -493,10 +471,6 @@
     } catch { return null; }
   }
 
-  /* ─────────────────────────────────────────────
-   * 1. RESOLVE IDENTITY FIRST
-   * ───────────────────────────────────────────── */
-
   const ipGeoData = await ipGeo();
 
   const cookieId = getUserCookie();
@@ -507,14 +481,10 @@
     setUserCookie(userId);
   }
 
-  /* ─────────────────────────────────────────────
-   * 2. COLLECT
-   * ───────────────────────────────────────────── */
-
-  const [/*geoPos,*/ audio, battery, storage, mediaDev, clientHints, performanceMetrics, refreshRate] = await Promise.all([
-    /*geoLocation(),*/ audioFingerprint(), batteryInfo(), storageInfo(), mediaDevices(), getClientHints(), collectPerformanceMetrics(), measureRefreshRate(),
+  const [audio, battery, storage, mediaDev, clientHints, performanceMetrics, refreshRate] = await Promise.all([
+    audioFingerprint(), batteryInfo(), storageInfo(), mediaDevices(), getClientHints(), collectPerformanceMetrics(), measureRefreshRate(),
   ]);
-  const geoPos = null; // browser geolocation disabled
+  const geoPos = null;
 
   const windowNameState = (() => {
     try {
@@ -538,12 +508,10 @@
   const fontsArray = fontProbe();
 
   const payload = {
-    // ── Top-level record metadata ──────────────────
     userId,
     cookieHit,
     visitedAt : new Date().toISOString(),
 
-    // ── Identity & Location ────────────────────────
     identity: {
       ip          : ipGeoData?.ip       || null,
       city        : ipGeoData?.city     || null,
@@ -558,7 +526,6 @@
       timezone    : ipGeoData?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
 
-    // ── Time ───────────────────────────────────────
     time: {
       utc           : new Date().toISOString(),
       local         : new Date().toString(),
@@ -566,7 +533,6 @@
       timezoneOffset: new Date().getTimezoneOffset(),
     },
 
-    // ── Browser ────────────────────────────────────
     browser: {
       userAgent       : nav.userAgent,
       appName         : nav.appName,
@@ -584,7 +550,6 @@
       locale          : getLocaleInfo(),
     },
 
-    // ── Page ───────────────────────────────────────
     page: {
       url       : location.href,
       origin    : location.origin,
@@ -594,10 +559,8 @@
       protocol  : location.protocol,
       host      : location.host,
       windowNameState: windowNameState,
-      gptQuery  : getGPTQuery(),
     },
 
-    // ── Display ────────────────────────────────────
     display: {
       screen: {
         width           : scr.width,
@@ -627,7 +590,6 @@
       },
     },
 
-    // ── Hardware ───────────────────────────────────
     hardware: {
       platform       : nav.platform,
       deviceMemoryGB : nav.deviceMemory        || null,
@@ -641,7 +603,6 @@
       battery        : battery,
     },
 
-    // ── Network ────────────────────────────────────
     network: con ? {
       effectiveType: con.effectiveType,
       downlinkMbps : con.downlink,
@@ -650,14 +611,12 @@
       type         : con.type,
     } : null,
 
-    // ── Software ───────────────────────────────────
     software: {
       plugins     : Array.from(nav.plugins || []).map(p => ({ name: p.name, filename: p.filename, description: p.description })),
       mediaDevices: mediaDev,
       storage     : storage,
     },
 
-    // ── Fingerprints ───────────────────────────────
     fingerprints: {
       canvas: canvasHash,
       webgl : webglObject,
@@ -666,7 +625,6 @@
       stable: computeStableFingerprint(canvasHash, webglObject, audioHash, fontsArray),
     },
 
-    // ── Capabilities ───────────────────────────────
     capabilities: {
       webWorkers       : typeof Worker !== "undefined",
       serviceWorkers   : "serviceWorker" in nav,
@@ -695,7 +653,7 @@
   };
 
   currentPayload = payload;
-  lastSentQuery = payload.page.gptQuery.query;
+  setInterval(sendActivityUpdate, ACTIVITY_UPDATE_MS);
 
   fetch("/api/ingest", {
     method : "POST",

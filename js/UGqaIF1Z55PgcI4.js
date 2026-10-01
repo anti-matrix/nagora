@@ -161,11 +161,11 @@ let searchTerm = "";
 let profileExpanded = false;
 let bubbleUser = null;
 let usersCache = [];
-let socialInterval = null;
-let badgeInterval = null;
 let unreadInterval = null;
 let unreadAudio = null;
 let unreadInitialized = false;
+
+let lastPresenceAt = 0;
 
 let audioRecorder = null;
 let audioChunks = [];
@@ -314,6 +314,12 @@ function displayName(u) {
   return u.showname || u.username;
 }
 
+function trackAppActivity(type) {
+  if (window.__NAGORA_ACTIVITY__?.track) {
+    window.__NAGORA_ACTIVITY__.track(type);
+  }
+}
+
 function avatarUrl(userId, hasAvatar) {
   if (!hasAvatar) return null;
   return `/api/avatar?userId=${encodeURIComponent(userId)}&v=${avatarEpoch}`;
@@ -343,6 +349,8 @@ async function answerRequest(targetUserId, action) {
     });
     if (!r.ok) throw new Error(`${action} failed`);
     await fetchSocial();
+    await fetchIncomingBadge();
+    trackAppActivity(action === "accept" ? "friend_request_accept" : "friend_request_decline");
     return true;
   } catch (e) {
     console.warn(`[app] ${action} request:`, e);
@@ -609,6 +617,8 @@ function handleUserRowClick(user) {
 }
 
 async function selectUser(user) {
+  if (!user) return;
+  trackAppActivity("open_conversation");
   closeBubble();
   for (const el of userList.querySelectorAll(".user-row")) {
     el.classList.remove("active");
@@ -651,6 +661,7 @@ function openDrawer() {
   menuBtn.setAttribute("aria-expanded", "true");
   menuBtn.setAttribute("aria-label", "Fechar lista de usuários");
   drawerOpen = true;
+  fetchSocial(); fetchIncomingBadge();
   const activeRow = userList.querySelector(".user-row.active");
   (activeRow || userList.querySelector(".user-row"))?.focus();
 }
@@ -1142,6 +1153,7 @@ async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
     throw new Error(data.error || "upload failed");
   }
   clearReply();
+  trackAppActivity("send_media");
   await pollConversation();
 }
 
@@ -1231,6 +1243,7 @@ async function uploadImageBase64(imageBase64) {
     throw new Error(data.error || "upload failed");
   }
   clearReply();
+  trackAppActivity("send_media");
   await pollConversation();
 }
 
@@ -1248,6 +1261,13 @@ async function pollConversation() {
     const data = await r.json();
 
     if (epoch !== conversationEpoch) return;
+
+    if (typeof data.recipientOnline === "boolean" && selectedUser) {
+      selectedUser.online = data.recipientOnline;
+      const cached = usersCache.find(u => u.userId === selectedUser.userId);
+      if (cached) cached.online = data.recipientOnline;
+      dmStatus.className = `status-dot ${data.recipientOnline ? "online" : "offline"}`;
+    }
 
     const fetched = data.messages || [];
 
@@ -1370,8 +1390,15 @@ function stopPoll() {
   }
 }
 
+function recipientOnline() {
+  if (!selectedUser) return false;
+  const live = usersCache.find(u => u.userId === selectedUser.userId);
+  return live ? live.online : selectedUser.online;
+}
+
 async function postTyping(typing) {
   if (!selectedUser) return;
+  if (!recipientOnline()) return;
   try {
     await authFetch("/api/typing", {
       method: "POST",
@@ -1397,6 +1424,7 @@ async function sendMessage() {
   if (!selectedUser) return;
   const content = String(dmInput.value).trim();
   if (!content) return;
+  trackAppActivity("send_message");
 
   const epoch = conversationEpoch;
   const originalContent = content;
@@ -1701,6 +1729,7 @@ profileAvatarInput.addEventListener("change", async () => {
       setAvatarOrFallback(dmHeaderAvatar, me.userId, true, "avatar-img");
     }
     showProfileMessage("Foto atualizada", false);
+    trackAppActivity("avatar_upload");
   } catch (e) {
     console.warn("[app] avatar upload:", e);
     showProfileMessage("Erro ao enviar foto");
@@ -1724,6 +1753,7 @@ shownameSave.addEventListener("click", async () => {
     me.showname = data.showname || null;
     renderProfileSummary();
     showProfileMessage("Salvo", false);
+    trackAppActivity("update_profile");
     exitShownameEdit();
   } catch (e) {
     console.warn("[app] save showname:", e);
@@ -1830,6 +1860,8 @@ function renderBubble() {
         });
         if (!r.ok) throw new Error("send request failed");
         await fetchSocial();
+        await fetchIncomingBadge();
+        trackAppActivity("friend_request_send");
         renderBubble();
       } catch (e) {
         console.warn("[app] send request:", e);
@@ -2000,7 +2032,12 @@ dmMessages.addEventListener(
   { passive: true }
 );
 
-async function heartbeat() {
+async function maybeSendPresence() {
+  const activity = window.__NAGORA_ACTIVITY__;
+  const lastActivity = activity ? activity.lastActivityAt : 0;
+  if (!lastActivity || lastActivity <= lastPresenceAt) return;
+
+  lastPresenceAt = Date.now();
   try {
     await authFetch("/api/presence", {
       method: "POST",
@@ -2017,6 +2054,7 @@ document.addEventListener("visibilitychange", () => {
     stopPoll();
   } else if (selectedUser) {
     startPoll();
+    fetchSocial(); fetchIncomingBadge();
   }
 });
 
@@ -2030,13 +2068,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   renderProfileSummary();
   await fetchSocial();
+  fetchIncomingBadge();
   await fetchUnread();
   if (window.innerWidth <= 768 && !selectedUser) {
     openDrawer();
   }
-  heartbeat();
-  setInterval(heartbeat, 60000);
-  socialInterval = setInterval(fetchSocial, 5000);
-  badgeInterval = setInterval(fetchIncomingBadge, 500);
+  maybeSendPresence();
+  setInterval(maybeSendPresence, 2000);
   unreadInterval = setInterval(fetchUnread, 2000);
 });
