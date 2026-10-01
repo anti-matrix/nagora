@@ -1,3 +1,48 @@
+// Injects the auth layout before any DOM refs are resolved.
+(function buildAuth() {
+  const markup = `
+    <h1 class="nagora-title">NAGORA</h1>
+
+    <div class="auth-card">
+        <div class="auth-nav">
+            <button id="tab-login" class="active" type="button">Entrar</button>
+            <button id="tab-signup" type="button">Criar conta</button>
+        </div>
+
+        <div class="auth-body">
+            <h4 class="text-center mb-4" id="auth-heading">Faça login</h4>
+
+            <div id="message" class="mb-3 small"></div>
+
+            <form id="auth-form" novalidate>
+                <div class="mb-3">
+                    <label for="username" class="form-label">Usuário</label>
+                    <input type="text" class="form-control" id="username" autocomplete="username" required/>
+                    <div class="form-text">5 a 15 caracteres, sem espaços</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <input type="password" class="form-control" id="password" autocomplete="current-password" required/>
+                    <div class="form-text" id="password-help">Mínimo 8 caracteres, com letras e números</div>
+                </div>
+
+                <div class="mb-3 hidden-field" id="confirm-group">
+                    <label for="confirm-password" class="form-label">Confirmar senha</label>
+                    <input type="password" class="form-control" id="confirm-password" autocomplete="new-password"/>
+                </div>
+
+                <button type="submit" class="btn btn-light w-100" id="submit-btn">Entrar</button>
+            </form>
+
+        </div>
+    </div>
+
+`;
+  document.body.insertAdjacentHTML("afterbegin", markup);
+  if (!document.getElementById("auth-form")) throw new Error("buildAuth: layout injection failed");
+})();
+
 const USERNAME_RE = /^[^\s]{5,15}$/;
 const HAS_LETTER  = /[A-Za-z]/;
 const HAS_NUMBER  = /[0-9]/;

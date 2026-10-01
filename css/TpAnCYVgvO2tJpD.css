@@ -350,6 +350,7 @@ body {
   resize: none;
   min-height: 44px;
   max-height: 120px;
+  overflow-y: auto;
   font-family: inherit;
 }
 
@@ -362,6 +363,31 @@ body {
   border-color: #ccc;
   color: #fff;
   outline: none;
+}
+
+/* Custom scrollbar for the DM composer input */
+.dm-input::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dm-input::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+}
+
+.dm-input::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.dm-input:hover::-webkit-scrollbar-thumb,
+.dm-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.dm-input {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.03);
 }
 
 .dm-attach-wrap,

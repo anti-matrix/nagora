@@ -1,3 +1,135 @@
+// Injects the full app layout before any DOM refs are resolved.
+(function buildApp() {
+  const markup = `
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span>USUÁRIOS</span>
+                <button type="button" id="search-toggle" class="search-toggle" aria-label="Buscar usuários">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            <div class="search-box" id="search-box" hidden>
+                <input type="text" id="search-input" placeholder="Buscar @usuário" aria-label="Buscar usuários" autocomplete="off" />
+            </div>
+            <div class="user-list" id="user-list"></div>
+            <div class="profile-card" id="profile-card">
+                <button type="button" class="profile-summary" id="profile-summary" aria-expanded="false">
+                    <span class="profile-icon"><i class="bi bi-person-circle"></i></span>
+                    <span class="profile-name" id="profile-name">@username</span>
+                    <span class="profile-chevron"><i class="bi bi-chevron-up"></i></span>
+                    <span class="profile-badge" id="profile-badge" hidden></span>
+                </button>
+                <div class="profile-body" id="profile-body" hidden>
+                    <div class="profile-avatar"><i class="bi bi-person-circle"></i></div>
+                    <button type="button" class="profile-pfp-btn" id="profile-pfp-btn" aria-label="Foto de perfil">Adicionar PFP</button>
+                    <label class="profile-label">Nome de exibição</label>
+                    <div class="profile-showname-display" id="profile-showname-display">
+                        <span class="profile-showname-value empty" id="profile-showname-value">—</span>
+                        <button type="button" id="showname-edit">Adicionar</button>
+                    </div>
+                    <div class="profile-showname-row" id="showname-edit-row" hidden>
+                        <input type="text" id="showname-input" maxlength="20" placeholder="Como quer ser chamado?" aria-label="Nome de exibição" />
+                        <button type="button" id="showname-save">Salvar</button>
+                        <button type="button" id="showname-cancel">Cancelar</button>
+                    </div>
+                    <input type="file" id="profile-avatar-input" accept="image/*" hidden />
+                    <div class="profile-message" id="profile-message"></div>
+                    <div class="profile-requests" id="profile-requests" hidden>
+                        <div class="profile-requests-heading">Solicitações recebidas</div>
+                        <div class="profile-requests-list" id="profile-requests-list"></div>
+                    </div>
+                    <button type="button" class="profile-logout" id="profile-logout" aria-label="Sair" title="Sair"><i class="bi bi-power"></i></button>
+                </div>
+            </div>
+        </aside>
+        <main class="main">
+            <div class="dm-placeholder" id="dm-placeholder">
+  Selecione um usuário para conversar
+  <button type="button" class="dm-menu-btn" id="dm-placeholder-menu-btn" aria-label="Abrir lista de usuários" aria-expanded="false" aria-controls="sidebar">
+    <i class="bi bi-list"></i>
+  </button>
+</div>
+            <div class="dm-panel" id="dm-panel" hidden>
+                    <div class="dm-header" id="dm-header">
+                    <button type="button" class="dm-menu-btn" id="dm-menu-btn" aria-label="Abrir lista de usuários" aria-expanded="false" aria-controls="sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <span class="dm-header-avatar" id="dm-header-avatar"><i class="bi bi-person-circle"></i></span>
+                    <span class="status-dot offline" id="dm-status" aria-hidden="true"></span>
+                    <h4 id="dm-username"></h4>
+                </div>
+                <div class="dm-typing" id="dm-typing"></div>
+                <div class="dm-reply-bar" id="dm-reply-bar" hidden>
+                    <div class="dm-reply-info">
+                        <span class="dm-reply-label">Respondendo a <strong id="dm-reply-name"></strong></span>
+                        <span class="dm-reply-snippet" id="dm-reply-snippet"></span>
+                    </div>
+                    <button type="button" class="dm-reply-cancel" id="dm-reply-cancel" aria-label="Cancelar resposta"><i class="bi bi-x"></i></button>
+                </div>
+                <div class="dm-messages" id="dm-messages" tabindex="-1"></div>
+                <div class="dm-composer">
+                    <input type="file" id="dm-image-input" accept="image/*" hidden />
+                    <div class="dm-attach-wrap">
+                        <button type="button" class="dm-attach-btn" id="dm-attach" aria-label="Anexo"><i class="bi bi-paperclip"></i></button>
+                        <div class="dm-attach-menu" id="dm-attach-menu">
+                            <button type="button" id="dm-image-btn"><i class="bi bi-image"></i> Imagem</button>
+                            <button type="button" disabled title="Áudio em breve"><i class="bi bi-mic"></i> Áudio</button>
+                            <button type="button" disabled title="em breve"><i class="bi bi-camera-video"></i> Vídeo</button>
+                        </div>
+                    </div>
+                    <textarea class="dm-input" id="dm-input" rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+                    <button type="button" class="dm-audio-btn" id="dm-audio" aria-label="Áudio"><i class="bi bi-mic"></i></button>
+                    <button type="button" class="dm-send-btn" id="dm-send" aria-label="Enviar"><i class="bi bi-send"></i></button>
+                </div>
+            </div>
+        </main>
+        <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
+            <button type="button" class="contact-panel-close" id="contact-panel-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
+            <div class="contact-panel-body">
+                <div class="contact-panel-avatar" id="contact-panel-avatar"><i class="bi bi-person-circle"></i></div>
+                <div class="contact-panel-name" id="contact-name"></div>
+                <div class="contact-panel-handle" id="contact-handle"></div>
+                <div class="contact-panel-status" id="contact-status"></div>
+                <div class="contact-panel-meta" id="contact-last-seen"></div>
+                <div class="contact-panel-meta" id="contact-friends-since"></div>
+                <div class="contact-panel-meta" id="contact-first-conversation"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
+
+    <div id="dm-lightbox" class="dm-lightbox" hidden>
+      <button type="button" class="dm-lightbox-close" id="dm-lightbox-close" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>
+      <img id="dm-lightbox-img" alt="Imagem ampliada" />
+    </div>
+
+    <div class="user-bubble" id="user-bubble" hidden>
+        <button type="button" class="user-bubble-close" id="user-bubble-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
+        <div class="user-bubble-icon"><i class="bi bi-person-circle"></i></div>
+        <div class="user-bubble-name" id="user-bubble-name"></div>
+        <div class="user-bubble-handle" id="user-bubble-handle"></div>
+        <div class="user-bubble-actions" id="user-bubble-actions"></div>
+    </div>
+
+    <div class="contact-panel-overlay" id="contact-panel-overlay" hidden></div>
+
+    <div class="logout-confirm-overlay" id="logout-confirm-overlay" hidden></div>
+    <div class="logout-confirm" id="logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title" hidden>
+        <h3 id="logout-confirm-title">Sair</h3>
+        <p id="logout-confirm-message">Tem certeza que deseja sair?</p>
+        <div class="logout-confirm-actions">
+            <button type="button" id="logout-confirm-cancel" class="logout-confirm-cancel">Cancelar</button>
+            <button type="button" id="logout-confirm-ok" class="logout-confirm-ok"><i class="bi bi-power"></i> Sair</button>
+        </div>
+    </div>
+
+`;
+  document.body.insertAdjacentHTML("afterbegin", markup);
+  if (!document.getElementById("sidebar")) throw new Error("buildApp: layout injection failed");
+})();
+
 let me = null;
 let selectedUser = null;
 let pollInterval = null;
@@ -1138,6 +1270,12 @@ async function postTyping(typing) {
   }
 }
 
+function autoResizeInput() {
+  if (!dmInput) return;
+  dmInput.style.height = "auto";
+  dmInput.style.height = dmInput.scrollHeight + "px";
+}
+
 async function sendMessage() {
   if (!selectedUser) return;
   const content = String(dmInput.value).trim();
@@ -1152,6 +1290,7 @@ async function sendMessage() {
   renderMessages({ scroll: "bottom" });
 
   dmInput.value = "";
+  autoResizeInput();
   clearTimeout(typingDebounceTimer);
 
   try {
@@ -1193,6 +1332,7 @@ async function sendMessage() {
     }
 
     dmInput.value = originalContent;
+    autoResizeInput();
     if (originalReply) {
       replyingTo = originalReply;
       renderReplyBar();
@@ -1214,6 +1354,7 @@ dmSend.addEventListener("click", sendMessage);
 replyCancel.addEventListener("click", clearReply);
 
 dmInput.addEventListener("input", async () => {
+  autoResizeInput();
   if (!selectedUser) return;
   const value = String(dmInput.value).trim();
 
