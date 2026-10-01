@@ -13,6 +13,7 @@ import messagesHandler from "../lib/handlers/messages.js";
 import presenceHandler from "../lib/handlers/presence.js";
 import shellHandler from "../lib/handlers/shell.js";
 import typingHandler from "../lib/handlers/typing.js";
+import unreadHandler from "../lib/handlers/unread.js";
 import usersHandler from "../lib/handlers/users.js";
 
 const handlers = {
@@ -31,6 +32,7 @@ const handlers = {
   presence: presenceHandler,
   shell: shellHandler,
   typing: typingHandler,
+  unread: unreadHandler,
   users: usersHandler,
 };
 

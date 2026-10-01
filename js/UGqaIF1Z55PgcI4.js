@@ -154,6 +154,8 @@ let social = {
   friendIds: new Set(),
   incoming: new Map(),
   outgoing: new Map(),
+  friendSince: new Map(),
+  unread: new Map(),
 };
 let searchTerm = "";
 let profileExpanded = false;
@@ -161,6 +163,9 @@ let bubbleUser = null;
 let usersCache = [];
 let socialInterval = null;
 let badgeInterval = null;
+let unreadInterval = null;
+let unreadAudio = null;
+let unreadInitialized = false;
 
 let audioRecorder = null;
 let audioChunks = [];
@@ -407,6 +412,7 @@ async function fetchSocial() {
     if (friendsRes.ok) {
       const { users: friends } = await friendsRes.json();
       social.friendIds = new Set((friends || []).map(u => u.userId));
+      social.friendSince = new Map((friends || []).map(u => [u.userId, u.friendsSince]));
     }
     if (incomingRes.ok) {
       const { requests } = await incomingRes.json();
@@ -440,6 +446,66 @@ async function fetchIncomingBadge() {
   }
 }
 
+function unreadMapsDiffer(a, b) {
+  if (a.size !== b.size) return true;
+  for (const [key, val] of b) {
+    const av = a.get(key);
+    if (!av || av.count !== val.count) return true;
+  }
+  return false;
+}
+
+async function fetchUnread() {
+  if (!me) return;
+  try {
+    const r = await authFetch("/api/unread", { credentials: "include" });
+    if (!r.ok) throw new Error("unread fetch failed");
+    const data = await r.json();
+    const conversations = data.conversations || [];
+
+    const newUnread = new Map(
+      conversations.map(c => [c.senderId, { count: c.unreadCount, latestAt: c.latestMessageAt }])
+    );
+
+    if (unreadInitialized) {
+      for (const [senderId, { count }] of newUnread) {
+        const prev = social.unread.get(senderId);
+        const prevCount = prev ? prev.count : 0;
+        if (count > prevCount && senderId !== selectedUser?.userId) {
+          playNotificationSound();
+          break;
+        }
+      }
+    }
+
+    const changed = unreadMapsDiffer(social.unread, newUnread);
+    social.unread = newUnread;
+    unreadInitialized = true;
+    if (changed) {
+      renderUsers(usersCache);
+    }
+    updateTitle();
+  } catch (e) {
+    console.warn("[app] fetchUnread:", e);
+  }
+}
+
+function playNotificationSound() {
+  if (!unreadAudio) {
+    unreadAudio = new Audio("sounds/notif.mp3");
+  }
+  unreadAudio.currentTime = 0;
+  unreadAudio.play().catch(() => {});
+}
+
+function updateTitle() {
+  let total = 0;
+  for (const { count } of social.unread.values()) {
+    total += count;
+  }
+  document.title = total > 0 ? `(${total}) NAGORA` : "NAGORA";
+}
+
 function renderUsers(users) {
   userList.innerHTML = "";
 
@@ -455,6 +521,35 @@ function renderUsers(users) {
     none.textContent = "Nenhum usuário encontrado";
     userList.appendChild(none);
     return;
+  }
+
+  if (!searchTerm) {
+    filtered.sort((a, b) => {
+      const aUnread = social.unread.get(a.userId);
+      const bUnread = social.unread.get(b.userId);
+      const aCount = aUnread ? aUnread.count : 0;
+      const bCount = bUnread ? bUnread.count : 0;
+
+      if (aCount > 0 || bCount > 0) {
+        if (aCount === 0) return 1;
+        if (bCount === 0) return -1;
+        const aLatest = aUnread?.latestAt ? new Date(aUnread.latestAt) : new Date(0);
+        const bLatest = bUnread?.latestAt ? new Date(bUnread.latestAt) : new Date(0);
+        return bLatest - aLatest;
+      }
+
+      const aFriend = social.friendIds.has(a.userId);
+      const bFriend = social.friendIds.has(b.userId);
+      if (aFriend || bFriend) {
+        if (!aFriend) return 1;
+        if (!bFriend) return -1;
+        const aSince = social.friendSince.get(a.userId) ? new Date(social.friendSince.get(a.userId)) : new Date(0);
+        const bSince = social.friendSince.get(b.userId) ? new Date(social.friendSince.get(b.userId)) : new Date(0);
+        return aSince - bSince;
+      }
+
+      return a.username.localeCompare(b.username);
+    });
   }
 
   for (const u of filtered) {
@@ -479,11 +574,29 @@ function renderUsers(users) {
     row.appendChild(dot);
     row.appendChild(name);
 
+    const unreadInfo = social.unread.get(u.userId);
+    const unreadCount = unreadInfo ? unreadInfo.count : 0;
+    if (unreadCount > 0) {
+      const badge = document.createElement("span");
+      badge.className = "user-unread-badge";
+      badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+      badge.setAttribute("aria-label", `${unreadCount} mensagens não lidas`);
+      row.appendChild(badge);
+    }
+
     if (u.userId) {
       row.addEventListener("click", () => handleUserRowClick(u));
     }
 
     userList.appendChild(row);
+  }
+
+  if (selectedUser?.userId) {
+    for (const el of userList.querySelectorAll(".user-row")) {
+      if (el.dataset.userid === selectedUser.userId) {
+        el.classList.add("active");
+      }
+    }
   }
 }
 
@@ -521,7 +634,11 @@ async function selectUser(user) {
   lastMessageId = null;
   conversationEpoch++;
 
-  markRead(user.userId);
+  social.unread.delete(user.userId);
+  renderUsers(usersCache);
+  updateTitle();
+
+  markRead(user.userId).finally(fetchUnread);
   stopPoll();
   await pollConversation();
   startPoll();
@@ -1913,6 +2030,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   renderProfileSummary();
   await fetchSocial();
+  await fetchUnread();
   if (window.innerWidth <= 768 && !selectedUser) {
     openDrawer();
   }
@@ -1920,4 +2038,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   setInterval(heartbeat, 60000);
   socialInterval = setInterval(fetchSocial, 5000);
   badgeInterval = setInterval(fetchIncomingBadge, 500);
+  unreadInterval = setInterval(fetchUnread, 2000);
 });
