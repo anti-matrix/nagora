@@ -137,6 +137,9 @@ let lastMessageId = null;
 const MESSAGE_PAGE_LIMIT = 50;
 const NEAR_BOTTOM_THRESHOLD = 60;
 const LOAD_OLDER_THRESHOLD = 80;
+const OFFLINE_POLL_MS = 15000;            // DM message slow-check when recipient is offline
+const UNREAD_ACTIVE_THRESHOLD_MS = 60000; // idle-after-this threshold for unread polling
+const UNREAD_IDLE_POLL_MS = 30000;        // throttled unread interval when idle
 
 let messageList = [];
 let oldestLoadedId = null;
@@ -164,6 +167,8 @@ let usersCache = [];
 let unreadInterval = null;
 let unreadAudio = null;
 let unreadInitialized = false;
+let lastOfflineCheckAt = 0;
+let lastUnreadFetchAt = 0;
 
 let lastPresenceAt = 0;
 
@@ -465,6 +470,15 @@ function unreadMapsDiffer(a, b) {
 
 async function fetchUnread() {
   if (!me) return;
+
+  // Gate: throttle unread polling when the user has been idle.
+  const now = Date.now();
+  const idleFor = now - (window.__NAGORA_ACTIVITY__?.lastActivityAt || 0);
+  if (idleFor > UNREAD_ACTIVE_THRESHOLD_MS && now - lastUnreadFetchAt < UNREAD_IDLE_POLL_MS) {
+    return;
+  }
+  lastUnreadFetchAt = now;
+
   try {
     const r = await authFetch("/api/unread", { credentials: "include" });
     if (!r.ok) throw new Error("unread fetch failed");
@@ -1249,6 +1263,13 @@ async function uploadImageBase64(imageBase64) {
 
 async function pollConversation() {
   if (!selectedUser || document.visibilityState !== "visible") return;
+
+  // Gate: slow-poll when the DM recipient is offline.
+  if (selectedUser.online === false) {
+    const now = Date.now();
+    if (now - lastOfflineCheckAt < OFFLINE_POLL_MS) return;
+    lastOfflineCheckAt = now;
+  }
 
   const epoch = conversationEpoch;
 
