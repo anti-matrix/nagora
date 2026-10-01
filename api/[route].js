@@ -9,6 +9,7 @@ import ingestHandler from "../lib/handlers/ingest.js";
 import logoutHandler from "../lib/handlers/logout.js";
 import logsHandler from "../lib/handlers/logs.js";
 import meHandler from "../lib/handlers/me.js";
+import mediaHandler from "../lib/handlers/media.js";
 import messagesHandler from "../lib/handlers/messages.js";
 import presenceHandler from "../lib/handlers/presence.js";
 import shellHandler from "../lib/handlers/shell.js";
@@ -28,6 +29,7 @@ const handlers = {
   logout: logoutHandler,
   logs: logsHandler,
   me: meHandler,
+  media: mediaHandler,
   messages: messagesHandler,
   presence: presenceHandler,
   shell: shellHandler,

@@ -70,11 +70,12 @@
                 <div class="dm-messages" id="dm-messages" tabindex="-1"></div>
                 <div class="dm-composer">
                     <input type="file" id="dm-image-input" accept="image/*" hidden />
+                    <input type="file" id="dm-audio-input" accept="audio/*" hidden />
                     <div class="dm-attach-wrap">
                         <button type="button" class="dm-attach-btn" id="dm-attach" aria-label="Anexo"><i class="bi bi-paperclip"></i></button>
                         <div class="dm-attach-menu" id="dm-attach-menu">
                             <button type="button" id="dm-image-btn"><i class="bi bi-image"></i> Imagem</button>
-                            <button type="button" disabled title="Áudio em breve"><i class="bi bi-mic"></i> Áudio</button>
+                            <button type="button" id="dm-audio-file-btn"><i class="bi bi-mic"></i> Áudio</button>
                             <button type="button" disabled title="em breve"><i class="bi bi-camera-video"></i> Vídeo</button>
                         </div>
                     </div>
@@ -86,14 +87,46 @@
         </main>
         <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
             <button type="button" class="contact-panel-close" id="contact-panel-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
+            <div class="contact-panel-tabs" role="tablist" aria-label="Abas do contato">
+                <button type="button" class="contact-tab active" id="contact-tab-info" role="tab" aria-selected="true" aria-controls="contact-tab-info-panel">Informações</button>
+                <button type="button" class="contact-tab" id="contact-tab-media" role="tab" aria-selected="false" aria-controls="contact-tab-media-panel">Mídia</button>
+            </div>
             <div class="contact-panel-body">
-                <div class="contact-panel-avatar" id="contact-panel-avatar"><i class="bi bi-person-circle"></i></div>
-                <div class="contact-panel-name" id="contact-name"></div>
-                <div class="contact-panel-handle" id="contact-handle"></div>
-                <div class="contact-panel-status" id="contact-status"></div>
-                <div class="contact-panel-meta" id="contact-last-seen"></div>
-                <div class="contact-panel-meta" id="contact-friends-since"></div>
-                <div class="contact-panel-meta" id="contact-first-conversation"></div>
+                <div class="contact-tab-panel active" id="contact-tab-info-panel" role="tabpanel" aria-labelledby="contact-tab-info">
+                    <div class="contact-panel-meta contact-panel-last-seen" id="contact-last-seen"></div>
+                    <div class="contact-panel-avatar" id="contact-panel-avatar"><i class="bi bi-person-circle"></i></div>
+                    <div class="contact-panel-name" id="contact-name"></div>
+                    <div class="contact-panel-handle" id="contact-handle"></div>
+                    <div class="contact-panel-status" id="contact-status"></div>
+                    <div class="contact-panel-info-list" id="contact-info-list">
+                        <div class="contact-panel-info-row" id="contact-friends-since">
+                            <i class="bi bi-people"></i>
+                            <span class="contact-info-label">Amigos desde</span>
+                            <span class="contact-info-value" id="contact-friends-since-value"></span>
+                        </div>
+                        <div class="contact-panel-info-row" id="contact-first-conversation">
+                            <i class="bi bi-chat-left"></i>
+                            <span class="contact-info-label">Primeira conversa em</span>
+                            <span class="contact-info-value" id="contact-first-conversation-value"></span>
+                        </div>
+                    </div>
+                    <button type="button" class="contact-panel-unfriend" id="contact-panel-unfriend" hidden>Desfazer amizade</button>
+                </div>
+                <div class="contact-tab-panel" id="contact-tab-media-panel" role="tabpanel" aria-labelledby="contact-tab-media" hidden>
+                    <div class="contact-media-empty" id="contact-media-empty" hidden>Nenhuma mídia</div>
+                    <div class="contact-media-section" id="contact-media-images-section">
+                        <h5>Imagens</h5>
+                        <div class="contact-media-grid" id="contact-media-images"></div>
+                    </div>
+                    <div class="contact-media-section" id="contact-media-audio-section">
+                        <h5>Áudios</h5>
+                        <div class="contact-media-list" id="contact-media-audios"></div>
+                    </div>
+                    <div class="contact-media-section" id="contact-media-video-section">
+                        <h5>Vídeos</h5>
+                        <div class="contact-media-empty">em breve</div>
+                    </div>
+                </div>
             </div>
         </aside>
     </div>
@@ -102,7 +135,10 @@
 
     <div id="dm-lightbox" class="dm-lightbox" hidden>
       <button type="button" class="dm-lightbox-close" id="dm-lightbox-close" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>
+      <button type="button" class="dm-lightbox-nav dm-lightbox-prev" id="dm-lightbox-prev" aria-label="Imagem anterior" hidden><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="dm-lightbox-nav dm-lightbox-next" id="dm-lightbox-next" aria-label="Próxima imagem" hidden><i class="bi bi-chevron-right"></i></button>
       <img id="dm-lightbox-img" alt="Imagem ampliada" />
+      <div class="dm-lightbox-thumbs" id="dm-lightbox-thumbs"></div>
     </div>
 
     <div class="user-bubble" id="user-bubble" hidden>
@@ -185,6 +221,9 @@ let avatarEpoch = 0;
 let contactPanelOpen = false;
 let currentContact = null;
 
+let activeContactTab = "info";
+let currentMediaCache = [];
+
 // Client token layer (defense-in-depth header auth)
 let clientToken = null;
 let clientTokenExpiry = 0;
@@ -250,9 +289,17 @@ const dmAttach = document.getElementById("dm-attach");
 const dmAttachMenu = document.getElementById("dm-attach-menu");
 const dmImageInput = document.getElementById("dm-image-input");
 const dmImageBtn = document.getElementById("dm-image-btn");
+const dmAudioFileBtn = document.getElementById("dm-audio-file-btn");
+const dmAudioInput = document.getElementById("dm-audio-input");
 const dmLightbox = document.getElementById("dm-lightbox");
 const dmLightboxImg = document.getElementById("dm-lightbox-img");
 const dmLightboxClose = document.getElementById("dm-lightbox-close");
+const dmLightboxPrev = document.getElementById("dm-lightbox-prev");
+const dmLightboxNext = document.getElementById("dm-lightbox-next");
+const dmLightboxThumbs = document.getElementById("dm-lightbox-thumbs");
+
+let lightboxImageIndex = -1;
+let lightboxImageSource = null;
 
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
@@ -310,8 +357,19 @@ const contactName = document.getElementById("contact-name");
 const contactHandle = document.getElementById("contact-handle");
 const contactStatus = document.getElementById("contact-status");
 const contactLastSeen = document.getElementById("contact-last-seen");
-const contactFriendsSince = document.getElementById("contact-friends-since");
-const contactFirstConversation = document.getElementById("contact-first-conversation");
+const contactTabInfo = document.getElementById("contact-tab-info");
+const contactTabMedia = document.getElementById("contact-tab-media");
+const contactTabInfoPanel = document.getElementById("contact-tab-info-panel");
+const contactTabMediaPanel = document.getElementById("contact-tab-media-panel");
+const contactInfoList = document.getElementById("contact-info-list");
+const contactFriendsSinceValue = document.getElementById("contact-friends-since-value");
+const contactFirstConversationValue = document.getElementById("contact-first-conversation-value");
+const contactPanelUnfriend = document.getElementById("contact-panel-unfriend");
+const contactMediaImages = document.getElementById("contact-media-images");
+const contactMediaAudios = document.getElementById("contact-media-audios");
+const contactMediaEmpty = document.getElementById("contact-media-empty");
+const contactMediaImagesSection = document.getElementById("contact-media-images-section");
+const contactMediaAudioSection = document.getElementById("contact-media-audio-section");
 
 const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
@@ -1171,15 +1229,106 @@ async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
   await pollConversation();
 }
 
-function openLightbox(src) {
-  dmLightboxImg.src = src;
+function imageMessages() {
+  return messageList
+    .filter(m => m.mediaType?.startsWith("image/"))
+    .map(m => ({ id: m.id, createdAt: m.createdAt }));
+}
+
+function currentLightboxImages() {
+  return lightboxImageSource || imageMessages();
+}
+
+function openLightbox(messageId, sourceList = null) {
+  const images = sourceList || imageMessages();
+  const idx = images.findIndex(img => String(img.id) === String(messageId));
+  if (idx === -1) return;
+  lightboxImageSource = sourceList;
+  lightboxImageIndex = idx;
+  dmLightboxImg.src = `/api/file?id=${encodeURIComponent(messageId)}`;
   dmLightbox.hidden = false;
+  renderLightboxNav();
+  renderLightboxThumbs();
   dmLightboxClose.focus();
 }
 
 function closeLightbox() {
   dmLightbox.hidden = true;
   dmLightboxImg.src = "";
+  dmLightboxThumbs.innerHTML = "";
+  lightboxImageIndex = -1;
+  lightboxImageSource = null;
+}
+
+function showLightboxImage(delta) {
+  const images = currentLightboxImages();
+  const newIdx = lightboxImageIndex + delta;
+  if (newIdx < 0 || newIdx >= images.length) return;
+  lightboxImageIndex = newIdx;
+  dmLightboxImg.src = `/api/file?id=${encodeURIComponent(images[newIdx].id)}`;
+  renderLightboxNav();
+  renderLightboxThumbs();
+}
+
+function renderLightboxNav() {
+  const images = currentLightboxImages();
+  dmLightboxPrev.hidden = lightboxImageIndex <= 0;
+  dmLightboxNext.hidden = lightboxImageIndex >= images.length - 1;
+}
+
+function renderLightboxThumbs() {
+  const images = currentLightboxImages();
+  const start = Math.max(0, lightboxImageIndex - 3);
+  const end = Math.min(images.length, lightboxImageIndex + 4);
+  const windowed = images.slice(start, end);
+  dmLightboxThumbs.innerHTML = "";
+  for (let i = 0; i < windowed.length; i++) {
+    const img = windowed[i];
+    const actualIdx = start + i;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dm-lightbox-thumb" + (actualIdx === lightboxImageIndex ? " active" : "");
+    const thumbImg = document.createElement("img");
+    thumbImg.src = `/api/file?id=${encodeURIComponent(img.id)}`;
+    thumbImg.alt = "";
+    btn.appendChild(thumbImg);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      lightboxImageIndex = actualIdx;
+      dmLightboxImg.src = `/api/file?id=${encodeURIComponent(img.id)}`;
+      renderLightboxNav();
+      renderLightboxThumbs();
+    });
+    dmLightboxThumbs.appendChild(btn);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function measureAudioDuration(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    audio.src = url;
+    const cleanup = () => URL.revokeObjectURL(url);
+    audio.addEventListener("loadedmetadata", () => {
+      const ms = Math.round(audio.duration * 1000);
+      cleanup();
+      resolve(ms);
+    });
+    audio.addEventListener("error", () => {
+      cleanup();
+      reject(new Error("cannot measure duration"));
+    });
+  });
 }
 
 function downscaleImage(file) {
@@ -1569,6 +1718,33 @@ dmImageInput.addEventListener("change", async () => {
   }
 });
 
+dmAudioFileBtn.addEventListener("click", () => {
+  dmAudioInput.click();
+  dmAttachMenu.classList.remove("open");
+});
+
+dmAudioInput.addEventListener("change", async () => {
+  const file = dmAudioInput.files?.[0];
+  dmAudioInput.value = "";
+  if (!file || !selectedUser) return;
+
+  if (!file.type.startsWith("audio/")) {
+    showImageError("Apenas arquivos de áudio são permitidos.");
+    return;
+  }
+
+  let durationMs = null;
+  try { durationMs = await measureAudioDuration(file); } catch { durationMs = null; }
+
+  try {
+    const base64 = await fileToBase64(file);
+    await uploadAudioBase64(base64, durationMs, file.type);
+  } catch (e) {
+    console.warn("[app] audio file upload:", e);
+    showImageError(e.message || "Falha ao enviar áudio.");
+  }
+});
+
 dmAudio.addEventListener("click", () => {
   if (!selectedUser) return;
   if (recordingIntent || audioRecording) {
@@ -1583,7 +1759,10 @@ dmAudio.addEventListener("contextmenu", (e) => e.preventDefault());
 dmMessages.addEventListener("click", (e) => {
   const img = e.target.closest(".dm-bubble img");
   if (!img) return;
-  openLightbox(img.src);
+  const bubble = img.closest(".dm-bubble");
+  const messageId = bubble?.dataset.id;
+  if (!messageId) return;
+  openLightbox(messageId);
 });
 
 // Close lightbox on backdrop click or close button.
@@ -1592,6 +1771,9 @@ dmLightbox.addEventListener("click", (e) => {
     closeLightbox();
   }
 });
+
+dmLightboxPrev.addEventListener("click", (e) => { e.stopPropagation(); showLightboxImage(-1); });
+dmLightboxNext.addEventListener("click", (e) => { e.stopPropagation(); showLightboxImage(1); });
 
 // Search behavior
 searchToggle.addEventListener("click", () => {
@@ -1895,6 +2077,71 @@ function renderBubble() {
 userBubbleClose.addEventListener("click", closeBubble);
 
 // Contact panel
+function switchContactTab(tab) {
+  activeContactTab = tab;
+  contactTabInfo.classList.toggle("active", tab === "info");
+  contactTabMedia.classList.toggle("active", tab === "media");
+  contactTabInfo.setAttribute("aria-selected", String(tab === "info"));
+  contactTabMedia.setAttribute("aria-selected", String(tab === "media"));
+  contactTabInfoPanel.classList.toggle("active", tab === "info");
+  contactTabInfoPanel.hidden = tab !== "info";
+  contactTabMediaPanel.classList.toggle("active", tab === "media");
+  contactTabMediaPanel.hidden = tab !== "media";
+  if (tab === "media") fetchMedia();
+}
+
+contactTabInfo.addEventListener("click", () => switchContactTab("info"));
+contactTabMedia.addEventListener("click", () => switchContactTab("media"));
+
+async function fetchMedia() {
+  if (!selectedUser) return;
+  try {
+    const r = await authFetch(`/api/media?with=${encodeURIComponent(selectedUser.userId)}`, { credentials: "include" });
+    if (!r.ok) throw new Error("media fetch failed");
+    const data = await r.json();
+    currentMediaCache = data.media || [];
+    renderMedia(currentMediaCache);
+  } catch (e) {
+    console.warn("[app] fetchMedia:", e);
+  }
+}
+
+function renderMedia(media) {
+  const images = media.filter(m => m.mediaType?.startsWith("image/"));
+  const audios = media.filter(m => m.mediaType?.startsWith("audio/"));
+
+  contactMediaImages.innerHTML = "";
+  contactMediaAudios.innerHTML = "";
+
+  contactMediaImagesSection.hidden = images.length === 0;
+  contactMediaAudioSection.hidden = audios.length === 0;
+  contactMediaEmpty.hidden = !(images.length === 0 && audios.length === 0);
+
+  for (const m of images) {
+    const img = document.createElement("img");
+    img.src = `/api/file?id=${encodeURIComponent(m.id)}`;
+    img.alt = "";
+    img.loading = "lazy";
+    img.addEventListener("click", () => openLightbox(m.id, images));
+    contactMediaImages.appendChild(img);
+  }
+
+  for (const m of audios) {
+    const row = document.createElement("div");
+    row.className = "contact-media-audio-row";
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = `/api/file?id=${encodeURIComponent(m.id)}`;
+    audio.preload = "metadata";
+    const duration = document.createElement("span");
+    duration.className = "dm-audio-duration";
+    duration.textContent = m.mediaDurationMs ? formatAudioDuration(m.mediaDurationMs) : "";
+    row.appendChild(audio);
+    row.appendChild(duration);
+    contactMediaAudios.appendChild(row);
+  }
+}
+
 function openContactPanel() {
   if (!selectedUser) return;
   closeBubble();
@@ -1910,6 +2157,7 @@ function openContactPanel() {
   } else {
     contactPanel.classList.remove("open");
   }
+  switchContactTab("info");
   populateContactPanel();
   setTimeout(() => contactPanelClose.focus(), 0);
 }
@@ -1950,12 +2198,14 @@ function populateContactPanel() {
         contactStatus.textContent = data.online ? "online" : "offline";
         contactStatus.className = `contact-panel-status ${data.online ? "online" : ""}`;
       }
-      contactFriendsSince.textContent = data.friendsSince
-        ? `Amigos desde ${new Date(data.friendsSince).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+      contactFriendsSinceValue.textContent = data.friendsSince
+        ? new Date(data.friendsSince).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
         : "";
-      contactFirstConversation.textContent = data.firstConversationAt
-        ? `Primeira conversa em ${new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+      contactFirstConversationValue.textContent = data.firstConversationAt
+        ? new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
         : "";
+      contactInfoList.hidden = !(data.friendsSince || data.firstConversationAt);
+      contactPanelUnfriend.hidden = !data.friendsSince;
       contactLastSeen.textContent = data.lastSeenAt
         ? `Visto por último em ${formatDayLabel(data.lastSeenAt)} às ${new Date(data.lastSeenAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
         : "";
@@ -1972,6 +2222,29 @@ dmHeader.addEventListener("click", (e) => {
 contactPanelClose.addEventListener("click", closeContactPanel);
 contactPanelOverlay.addEventListener("click", closeContactPanel);
 
+async function unfriendContact() {
+  if (!selectedUser) return;
+  if (!confirm("Deseja desfazer a amizade?")) return;
+  try {
+    const r = await authFetch("/api/friends", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "unfriend", targetUserId: selectedUser.userId }),
+    });
+    if (!r.ok) throw new Error("unfriend failed");
+    social.friendIds.delete(selectedUser.userId);
+    social.friendSince.delete(selectedUser.userId);
+    await fetchSocial();
+    closeContactPanel();
+    trackAppActivity("unfriend");
+  } catch (e) {
+    console.warn("[app] unfriend:", e);
+  }
+}
+
+contactPanelUnfriend.addEventListener("click", unfriendContact);
+
 // Close bubble when clicking outside.
 document.addEventListener("click", (e) => {
   if (!bubbleUser) return;
@@ -1982,6 +2255,12 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  if (!dmLightbox.hidden && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    showLightboxImage(e.key === "ArrowLeft" ? -1 : 1);
+    return;
+  }
+
   if (e.key !== "Escape") return;
 
   if (!logoutConfirm.hidden) {
