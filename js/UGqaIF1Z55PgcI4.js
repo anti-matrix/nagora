@@ -1476,6 +1476,13 @@ async function pollConversation() {
         messageList = messageList.concat(newMessages);
         sortMessages();
         lastMessageId = maxServerId(messageList);
+
+        if (newMessages.some(m => m.senderId === selectedUser.userId)) {
+          markRead(selectedUser.userId);
+          social.unread.delete(selectedUser.userId);
+          renderUsers(usersCache);
+          updateTitle();
+        }
       }
 
       if (oldestLoadedId == null) {
