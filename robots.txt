@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# Sitemap omitted: NAGORA is a single-page web app with no public sitemap yet.

@@ -183,7 +183,6 @@ let noMoreOlder = false;
 let loadingOlder = false;
 let conversationEpoch = 0;
 let pendingIdSeq = 0;
-
 let typingDebounceTimer = null;
 let lastTypingPost = 0;
 let replyingTo = null;
@@ -688,6 +687,30 @@ function handleUserRowClick(user) {
   }
 }
 
+function setInitialLoading(show) {
+  if (!dmMessages) return;
+  const existing = dmMessages.querySelector(".dm-initial-loader");
+  if (!show) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (existing) return;
+  const loader = document.createElement("div");
+  loader.className = "dm-initial-loader";
+  loader.setAttribute("role", "status");
+  loader.setAttribute("aria-live", "polite");
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement("span");
+    dot.setAttribute("aria-hidden", "true");
+    loader.appendChild(dot);
+  }
+  const sr = document.createElement("span");
+  sr.className = "dm-sr-only";
+  sr.textContent = "Carregando mensagens";
+  loader.appendChild(sr);
+  dmMessages.appendChild(loader);
+}
+
 async function selectUser(user) {
   if (!user) return;
   trackAppActivity("open_conversation");
@@ -708,6 +731,7 @@ async function selectUser(user) {
   dmTyping.textContent = "";
   dmMessages.innerHTML = "";
   dmMessages.classList.remove("loading-older");
+  setInitialLoading(true);
 
   messageList = [];
   oldestLoadedId = null;
@@ -722,6 +746,7 @@ async function selectUser(user) {
 
   markRead(user.userId).finally(fetchUnread);
   stopPoll();
+  lastOfflineCheckAt = 0;
   await pollConversation();
   startPoll();
   closeDrawer();
@@ -969,6 +994,7 @@ function getStatusIconInfo(m) {
 
 function renderMessages(options = {}) {
   const scrollMode = options.scroll || "bottom";
+  setInitialLoading(false);
 
   let wasNearBottom = false;
   let oldScrollTop = 0;
@@ -1501,6 +1527,7 @@ async function pollConversation() {
     dmTyping.textContent = data.typing ? "digitando…" : "";
   } catch (e) {
     console.warn("[app] pollConversation:", e);
+    if (epoch === conversationEpoch) setInitialLoading(false);
   }
 }
 

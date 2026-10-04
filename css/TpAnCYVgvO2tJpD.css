@@ -268,6 +268,7 @@ body {
   border-bottom: 1px solid #333;
   padding-bottom: 12px;
   margin-bottom: 4px;
+  cursor: pointer;
 }
 
 .dm-header h4 {
@@ -291,6 +292,60 @@ body {
   gap: 8px;
   padding-right: 4px;
   margin-bottom: 12px;
+}
+
+/* Initial conversation load indicator (three pulsing dots in a bubble) */
+.dm-initial-loader {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: auto 0;
+  padding: 14px 18px;
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 18px;
+}
+
+.dm-initial-loader span[aria-hidden="true"] {
+  width: 8px;
+  height: 8px;
+  background: #888;
+  border-radius: 50%;
+  animation: dm-initial-dot 1.4s infinite ease-in-out both;
+}
+
+.dm-initial-loader span[aria-hidden="true"]:nth-child(1) { animation-delay: 0s; }
+.dm-initial-loader span[aria-hidden="true"]:nth-child(2) { animation-delay: 0.2s; }
+.dm-initial-loader span[aria-hidden="true"]:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dm-initial-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.dm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 576px) {
+  .dm-initial-loader {
+    padding: 12px 16px;
+    gap: 5px;
+  }
+  .dm-initial-loader span[aria-hidden="true"] {
+    width: 6px;
+    height: 6px;
+  }
 }
 
 .dm-bubble {
