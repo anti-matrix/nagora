@@ -1443,6 +1443,7 @@ body {
 .contact-panel-unfriend:hover {
   background: #331111;
 }
+.contact-panel-info-row[hidden],
 .contact-panel-unfriend[hidden],
 .contact-panel-info-list[hidden] {
   display: none !important;

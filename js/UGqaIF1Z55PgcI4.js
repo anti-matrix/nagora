@@ -99,6 +99,11 @@
                     <div class="contact-panel-handle" id="contact-handle"></div>
                     <div class="contact-panel-status" id="contact-status"></div>
                     <div class="contact-panel-info-list" id="contact-info-list">
+                        <div class="contact-panel-info-row" id="contact-account-created">
+                            <i class="bi bi-calendar3"></i>
+                            <span class="contact-info-label">Conta criada em</span>
+                            <span class="contact-info-value" id="contact-account-created-value"></span>
+                        </div>
                         <div class="contact-panel-info-row" id="contact-friends-since">
                             <i class="bi bi-people"></i>
                             <span class="contact-info-label">Amigos desde</span>
@@ -206,6 +211,7 @@ let lastOfflineCheckAt = 0;
 let lastUnreadFetchAt = 0;
 
 let lastPresenceAt = 0;
+let lastPresenceAnyFriendOnline = true; // default true so initial load fetch goes through
 
 let audioRecorder = null;
 let audioChunks = [];
@@ -361,7 +367,11 @@ const contactTabMedia = document.getElementById("contact-tab-media");
 const contactTabInfoPanel = document.getElementById("contact-tab-info-panel");
 const contactTabMediaPanel = document.getElementById("contact-tab-media-panel");
 const contactInfoList = document.getElementById("contact-info-list");
+const contactAccountCreatedRow = document.getElementById("contact-account-created");
+const contactAccountCreatedValue = document.getElementById("contact-account-created-value");
+const contactFriendsSinceRow = document.getElementById("contact-friends-since");
 const contactFriendsSinceValue = document.getElementById("contact-friends-since-value");
+const contactFirstConversationRow = document.getElementById("contact-first-conversation");
 const contactFirstConversationValue = document.getElementById("contact-first-conversation-value");
 const contactPanelUnfriend = document.getElementById("contact-panel-unfriend");
 const contactMediaImages = document.getElementById("contact-media-images");
@@ -528,10 +538,18 @@ function unreadMapsDiffer(a, b) {
 async function fetchUnread() {
   if (!me) return;
 
-  // Gate: throttle unread polling when the user has been idle.
   const now = Date.now();
   const idleFor = now - (window.__NAGORA_ACTIVITY__?.lastActivityAt || 0);
-  if (idleFor > UNREAD_ACTIVE_THRESHOLD_MS && now - lastUnreadFetchAt < UNREAD_IDLE_POLL_MS) {
+  const isIdle = idleFor > UNREAD_ACTIVE_THRESHOLD_MS;
+
+  // Gate: when active, only poll if at least one friend is online.
+  // When idle, fall back to the existing idle throttle so unread is still caught up.
+  if (!isIdle && !lastPresenceAnyFriendOnline) {
+    return;
+  }
+
+  // Gate: throttle unread polling when the user has been idle.
+  if (isIdle && now - lastUnreadFetchAt < UNREAD_IDLE_POLL_MS) {
     return;
   }
   lastUnreadFetchAt = now;
@@ -2232,13 +2250,19 @@ function populateContactPanel() {
         contactStatus.textContent = data.online ? "online" : "offline";
         contactStatus.className = `contact-panel-status ${data.online ? "online" : ""}`;
       }
+      contactAccountCreatedValue.textContent = data.accountCreatedAt
+        ? new Date(data.accountCreatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+        : "";
       contactFriendsSinceValue.textContent = data.friendsSince
         ? new Date(data.friendsSince).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
         : "";
       contactFirstConversationValue.textContent = data.firstConversationAt
         ? new Date(data.firstConversationAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
         : "";
-      contactInfoList.hidden = !(data.friendsSince || data.firstConversationAt);
+      contactAccountCreatedRow.hidden = !data.accountCreatedAt;
+      contactFriendsSinceRow.hidden = !data.friendsSince;
+      contactFirstConversationRow.hidden = !data.firstConversationAt;
+      contactInfoList.hidden = contactAccountCreatedRow.hidden && contactFriendsSinceRow.hidden && contactFirstConversationRow.hidden;
       contactPanelUnfriend.hidden = !data.friendsSince;
       contactLastSeen.textContent = data.lastSeenAt
         ? `Visto por último em ${formatDayLabel(data.lastSeenAt)} às ${new Date(data.lastSeenAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
@@ -2373,11 +2397,15 @@ async function maybeSendPresence() {
 
   lastPresenceAt = Date.now();
   try {
-    await authFetch("/api/presence", {
+    const r = await authFetch("/api/presence", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
     });
+    if (r.ok) {
+      const data = await r.json();
+      lastPresenceAnyFriendOnline = !!(data.onlineFriendsCount && data.onlineFriendsCount > 0);
+    }
   } catch (e) {
     console.warn("[app] heartbeat:", e);
   }
