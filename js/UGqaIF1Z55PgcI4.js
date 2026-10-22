@@ -281,6 +281,63 @@ async function authFetch(url, options = {}) {
   return res;
 }
 
+// /api/file and /api/avatar require the client token, which <img>/<audio> src
+// cannot send — fetch them with authFetch and use blob URLs instead.
+const mediaBlobCache = new Map();
+
+function fetchMediaBlobUrl(url) {
+  if (!mediaBlobCache.has(url)) {
+    const p = authFetch(url, { credentials: "include" })
+      .then(r => {
+        if (!r.ok) throw new Error(`media ${r.status}`);
+        return r.blob();
+      })
+      .then(blob => URL.createObjectURL(blob))
+      .catch(err => {
+        mediaBlobCache.delete(url);
+        throw err;
+      });
+    mediaBlobCache.set(url, p);
+  }
+  return mediaBlobCache.get(url);
+}
+
+// Lazy elements only fetch once they scroll near the viewport.
+const lazyMediaObserver = "IntersectionObserver" in window
+  ? new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        lazyMediaObserver.unobserve(entry.target);
+        loadAuthedSrc(entry.target);
+      }
+    }, { rootMargin: "200px" })
+  : null;
+
+function setAuthedSrc(el, url, { lazy = false } = {}) {
+  el.dataset.mediaUrl = url;
+  if (lazy && lazyMediaObserver && !mediaBlobCache.has(url)) {
+    lazyMediaObserver.observe(el);
+    return;
+  }
+  loadAuthedSrc(el);
+}
+
+function loadAuthedSrc(el) {
+  const url = el.dataset.mediaUrl;
+  if (!url) return;
+  fetchMediaBlobUrl(url)
+    .then(blobUrl => {
+      if (el.dataset.mediaUrl === url) el.src = blobUrl;
+    })
+    .catch(() => {
+      if (el.dataset.mediaUrl === url) el.dispatchEvent(new Event("error"));
+    });
+}
+
+function fileUrl(messageId) {
+  return `/api/file?id=${encodeURIComponent(messageId)}`;
+}
+
 const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
 const dmPanel = document.getElementById("dm-panel");
@@ -404,10 +461,10 @@ function setAvatarOrFallback(container, userId, hasAvatar, imgClass) {
     return;
   }
   const img = document.createElement("img");
-  img.src = avatarUrl(userId, true);
   img.alt = "";
   img.className = imgClass;
   img.onerror = () => { container.innerHTML = '<i class="bi bi-person-circle"></i>'; };
+  setAuthedSrc(img, avatarUrl(userId, true));
   container.appendChild(img);
 }
 
@@ -873,7 +930,6 @@ function createImageBubble(messageId) {
   wrap.className = "dm-media-wrap";
 
   const img = document.createElement("img");
-  img.src = `/api/file?id=${encodeURIComponent(messageId)}`;
   img.alt = "Imagem";
 
   const spinner = document.createElement("div");
@@ -894,11 +950,7 @@ function createImageBubble(messageId) {
 
   img.addEventListener("load", reveal);
   img.addEventListener("error", onError);
-
-  // Already cached/decoded: skip the spinner flash.
-  if (img.complete && img.naturalWidth > 0) {
-    reveal();
-  }
+  setAuthedSrc(img, fileUrl(messageId), { lazy: true });
 
   wrap.appendChild(spinner);
   wrap.appendChild(error);
@@ -911,8 +963,8 @@ function createAudioBubble(message) {
   wrap.className = "dm-audio-wrap";
   const audio = document.createElement("audio");
   audio.controls = true;
-  audio.src = `/api/file?id=${encodeURIComponent(message.id)}`;
   audio.preload = "metadata";
+  setAuthedSrc(audio, fileUrl(message.id), { lazy: true });
   const duration = document.createElement("span");
   duration.className = "dm-audio-duration";
   duration.textContent = message.mediaDurationMs ? formatAudioDuration(message.mediaDurationMs) : "0:00";
@@ -1289,7 +1341,7 @@ function openLightbox(messageId, sourceList = null) {
   if (idx === -1) return;
   lightboxImageSource = sourceList;
   lightboxImageIndex = idx;
-  dmLightboxImg.src = `/api/file?id=${encodeURIComponent(messageId)}`;
+  setAuthedSrc(dmLightboxImg, fileUrl(messageId));
   dmLightbox.hidden = false;
   renderLightboxNav();
   renderLightboxThumbs();
@@ -1298,7 +1350,8 @@ function openLightbox(messageId, sourceList = null) {
 
 function closeLightbox() {
   dmLightbox.hidden = true;
-  dmLightboxImg.src = "";
+  delete dmLightboxImg.dataset.mediaUrl;
+  dmLightboxImg.removeAttribute("src");
   dmLightboxThumbs.innerHTML = "";
   lightboxImageIndex = -1;
   lightboxImageSource = null;
@@ -1309,7 +1362,7 @@ function showLightboxImage(delta) {
   const newIdx = lightboxImageIndex + delta;
   if (newIdx < 0 || newIdx >= images.length) return;
   lightboxImageIndex = newIdx;
-  dmLightboxImg.src = `/api/file?id=${encodeURIComponent(images[newIdx].id)}`;
+  setAuthedSrc(dmLightboxImg, fileUrl(images[newIdx].id));
   renderLightboxNav();
   renderLightboxThumbs();
 }
@@ -1333,13 +1386,13 @@ function renderLightboxThumbs() {
     btn.type = "button";
     btn.className = "dm-lightbox-thumb" + (actualIdx === lightboxImageIndex ? " active" : "");
     const thumbImg = document.createElement("img");
-    thumbImg.src = `/api/file?id=${encodeURIComponent(img.id)}`;
+    setAuthedSrc(thumbImg, fileUrl(img.id), { lazy: true });
     thumbImg.alt = "";
     btn.appendChild(thumbImg);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       lightboxImageIndex = actualIdx;
-      dmLightboxImg.src = `/api/file?id=${encodeURIComponent(img.id)}`;
+      setAuthedSrc(dmLightboxImg, fileUrl(img.id));
       renderLightboxNav();
       renderLightboxThumbs();
     });
@@ -2171,9 +2224,8 @@ function renderMedia(media) {
 
   for (const m of images) {
     const img = document.createElement("img");
-    img.src = `/api/file?id=${encodeURIComponent(m.id)}`;
+    setAuthedSrc(img, fileUrl(m.id), { lazy: true });
     img.alt = "";
-    img.loading = "lazy";
     img.addEventListener("click", () => openLightbox(m.id, images));
     contactMediaImages.appendChild(img);
   }
@@ -2183,8 +2235,8 @@ function renderMedia(media) {
     row.className = "contact-media-audio-row";
     const audio = document.createElement("audio");
     audio.controls = true;
-    audio.src = `/api/file?id=${encodeURIComponent(m.id)}`;
     audio.preload = "metadata";
+    setAuthedSrc(audio, fileUrl(m.id), { lazy: true });
     const duration = document.createElement("span");
     duration.className = "dm-audio-duration";
     duration.textContent = m.mediaDurationMs ? formatAudioDuration(m.mediaDurationMs) : "";

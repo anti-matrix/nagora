@@ -5,14 +5,11 @@
  * One-time migration: regenerate every account's api_key as a random,
  * non-reversible token.
  *
- * WARNING / AVISO: Running this script invalidates every existing session.
- * The `nagora_session` HttpOnly cookie stores the current api_key. After the
- * rotation, `requireAccountApiKey` and `requireClientToken` will not find a
- * matching row -> 401 -> the frontend redirects to index.html. Every user must
- * log in again to receive a fresh random key.
+ * Sessions are NOT affected: the `nagora_session` cookie holds accounts.auth_key,
+ * not api_key. To log everyone out, also clear auth_key
+ * (`UPDATE accounts SET auth_key = NULL`) — login regenerates it.
  *
- * The script is safe to re-run, but each run produces new keys and logs
- * everyone out again.
+ * Safe to re-run; each run produces new keys.
  */
 import { query, ensureSchema, end } from "../lib/db.js";
 import { generateApiKey } from "../lib/apikey.js";
