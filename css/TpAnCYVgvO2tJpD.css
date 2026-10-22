@@ -1750,3 +1750,236 @@ body {
   .contact-media-grid { grid-template-columns: repeat(2, 1fr); }
   .contact-media-audio-row audio { height: 32px; }
 }
+
+/* Composer emoji button (desktop only) */
+.dm-input-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+}
+.dm-input-wrap .dm-input {
+  width: 100%;
+  padding-right: 42px;
+}
+.dm-emoji-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dm-emoji-btn:hover,
+.dm-emoji-btn[aria-expanded="true"] {
+  color: #fff;
+}
+@media (hover: none), (pointer: coarse) {
+  .dm-emoji-btn { display: none; }
+  .dm-input-wrap .dm-input { padding-right: 10px; }
+}
+
+/* Emoji picker */
+.emoji-picker {
+  position: fixed;
+  z-index: 1200;
+  width: min(320px, calc(100vw - 16px));
+  height: min(340px, calc(100vh - 16px));
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.emoji-picker[hidden] {
+  display: none !important;
+}
+.emoji-picker-tabs {
+  display: flex;
+  border-bottom: 1px solid #333;
+}
+.emoji-picker-tab {
+  flex: 1;
+  height: 38px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  cursor: pointer;
+}
+.emoji-picker-tab:hover {
+  color: #fff;
+}
+.emoji-picker-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+.emoji-picker-title {
+  font-size: 0.75rem;
+  color: #888;
+  padding: 8px 10px 4px;
+}
+.emoji-picker-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  align-content: start;
+  padding: 0 6px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.03);
+}
+.emoji-picker-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.emoji-picker-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.emoji-picker-grid button {
+  aspect-ratio: 1;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.emoji-picker-grid button:hover {
+  background: #222;
+}
+.emoji-picker-empty {
+  grid-column: 1 / -1;
+  color: #666;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* Message reactions */
+.dm-react-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+/* Bridges the gap to the bubble so the hover doesn't drop on the way over. */
+.dm-react-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0 -6px;
+}
+.dm-bubble.own .dm-react-btn {
+  right: calc(100% + 4px);
+}
+.dm-bubble.other .dm-react-btn {
+  left: calc(100% + 4px);
+}
+.dm-bubble:hover .dm-react-btn,
+.dm-react-btn:focus-visible {
+  opacity: 1;
+}
+.dm-react-btn:hover {
+  color: #fff;
+}
+@media (pointer: coarse) {
+  .dm-react-btn {
+    opacity: 0.6;
+  }
+}
+
+.dm-bubble.has-reactions {
+  margin-bottom: 14px;
+}
+.dm-reactions {
+  position: absolute;
+  bottom: -14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+  padding: 1px 6px;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.dm-bubble.own .dm-reactions {
+  right: 8px;
+}
+.dm-bubble.other .dm-reactions {
+  left: 8px;
+}
+.dm-reactions:hover,
+.dm-reactions.mine {
+  border-color: #888;
+}
+.dm-reactions-count {
+  margin-left: 2px;
+  font-size: 0.7rem;
+  color: #aaa;
+}
+
+.dm-react-bar {
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.dm-react-bar[hidden] {
+  display: none !important;
+}
+.dm-react-bar button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dm-react-bar button:hover {
+  background: #222;
+}
+.dm-react-bar button.active {
+  background: #333;
+}
+.dm-react-bar .dm-react-more {
+  color: #888;
+  font-size: 1rem;
+}
+.dm-react-bar .dm-react-more:hover {
+  color: #fff;
+}

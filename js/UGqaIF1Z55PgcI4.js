@@ -81,7 +81,10 @@
                             <button type="button" id="dm-video-btn"><i class="bi bi-camera-video"></i> Vídeo</button>
                         </div>
                     </div>
-                    <textarea class="dm-input" id="dm-input" rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+                    <div class="dm-input-wrap">
+                        <textarea class="dm-input" id="dm-input" rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+                        <button type="button" class="dm-emoji-btn" id="dm-emoji-btn" aria-label="Emojis" aria-expanded="false" aria-controls="emoji-picker"><i class="bi bi-emoji-smile"></i></button>
+                    </div>
                     <button type="button" class="dm-audio-btn" id="dm-audio" aria-label="Áudio"><i class="bi bi-mic"></i></button>
                     <button type="button" class="dm-send-btn" id="dm-send" aria-label="Enviar"><i class="bi bi-send"></i></button>
                 </div>
@@ -147,6 +150,14 @@
       <img id="dm-lightbox-img" alt="Imagem ampliada" />
       <div class="dm-lightbox-thumbs" id="dm-lightbox-thumbs"></div>
     </div>
+
+    <div class="emoji-picker" id="emoji-picker" role="dialog" aria-label="Emojis" hidden>
+        <div class="emoji-picker-tabs" id="emoji-picker-tabs" role="tablist" aria-label="Categorias de emoji"></div>
+        <div class="emoji-picker-title" id="emoji-picker-title"></div>
+        <div class="emoji-picker-grid" id="emoji-picker-grid"></div>
+    </div>
+
+    <div class="dm-react-bar" id="dm-react-bar" role="menu" aria-label="Reagir" hidden></div>
 
     <div class="user-bubble" id="user-bubble" hidden>
         <button type="button" class="user-bubble-close" id="user-bubble-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
@@ -358,6 +369,12 @@ const dmAudioInput = document.getElementById("dm-audio-input");
 const dmVideoBtn = document.getElementById("dm-video-btn");
 const dmVideoInput = document.getElementById("dm-video-input");
 const dmUploadStatus = document.getElementById("dm-upload-status");
+const dmEmojiBtn = document.getElementById("dm-emoji-btn");
+const emojiPicker = document.getElementById("emoji-picker");
+const emojiPickerTabs = document.getElementById("emoji-picker-tabs");
+const emojiPickerTitle = document.getElementById("emoji-picker-title");
+const emojiPickerGrid = document.getElementById("emoji-picker-grid");
+const dmReactBar = document.getElementById("dm-react-bar");
 const dmLightbox = document.getElementById("dm-lightbox");
 const dmLightboxImg = document.getElementById("dm-lightbox-img");
 const dmLightboxClose = document.getElementById("dm-lightbox-close");
@@ -808,6 +825,8 @@ async function selectUser(user) {
   if (!user) return;
   trackAppActivity("open_conversation");
   closeBubble();
+  closeReactBar();
+  closeEmojiPicker();
   for (const el of userList.querySelectorAll(".user-row")) {
     el.classList.remove("active");
   }
@@ -1295,6 +1314,279 @@ function createVideoBubble(message) {
   return wrap;
 }
 
+// ── Emoji ───────────────────────────────────────────────────────────────
+// One picker serves both the composer (desktop-only button, stays open for
+// several inserts) and message reactions (closes after one pick).
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const EMOJI_RECENT_KEY = "ngr-emoji-recent";
+const EMOJI_RECENT_MAX = 24;
+const EMOJI_CATEGORIES = [
+  { id: "recent", label: "Recentes", icon: "bi-clock", emojis: [] },
+  { id: "smileys", label: "Smileys e pessoas", icon: "bi-emoji-smile", emojis: "😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 ☹️ 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾 🙈 🙉 🙊 👋 🤚 🖐️ ✋ 🖖 👌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 👀 👁️ 👅 👄 💋 👶 🧒 👦 👧 🧑 👱 👨 🧔 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 👮 🕵️ 💂 👷 🤴 👸 👳 👲 🧕 🤵 👰 🤰 🤱 👼 🎅 🤶 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 👯 🧖 👫 👭 👬 💏 💑 👪" },
+  { id: "nature", label: "Animais e natureza", icon: "bi-tree", emojis: "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐽 🐸 🐵 🐔 🐧 🐦 🐤 🐣 🐥 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🦟 🦗 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦧 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🦮 🐈 🐓 🦃 🦚 🦜 🦢 🦩 🕊️ 🐇 🦝 🦨 🦡 🦦 🦥 🐁 🐀 🐿️ 🦔 🐾 🐉 🐲 🌵 🎄 🌲 🌳 🌴 🌱 🌿 ☘️ 🍀 🎍 🎋 🍃 🍂 🍁 🍄 🐚 🌾 💐 🌷 🌹 🥀 🌺 🌸 🌼 🌻 🌞 🌝 🌛 🌜 🌚 🌕 🌖 🌗 🌘 🌑 🌒 🌓 🌔 🌙 🌎 🌍 🌏 🪐 💫 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⛄ 🌬️ 💨 💧 💦 ☔ ☂️ 🌊" },
+  { id: "food", label: "Comidas e bebidas", icon: "bi-cup-straw", emojis: "🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🌽 🥕 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🌭 🍔 🍟 🍕 🥪 🥙 🧆 🌮 🌯 🥗 🥘 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 ☕ 🍵 🧃 🥤 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️ 🥣 🥡 🥢 🧂" },
+  { id: "activities", label: "Atividades", icon: "bi-trophy", emojis: "⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛷 ⛸️ 🥌 🎿 ⛷️ 🏂 🪂 🏋️ 🤼 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🤽 🚣 🧗 🚵 🚴 🏆 🥇 🥈 🥉 🏅 🎖️ 🏵️ 🎗️ 🎫 🎟️ 🎪 🤹 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🎷 🎺 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🎰 🧩 🎉 🎊 🎈 🎁 🎀 🎃 🎆 🎇 🧨" },
+  { id: "travel", label: "Viagens e lugares", icon: "bi-geo-alt", emojis: "🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🚚 🚛 🚜 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ ⛽ 🚧 🚦 🚥 🚏 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🗾 🎑 🏞️ 🌅 🌄 🌠 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁" },
+  { id: "objects", label: "Objetos", icon: "bi-lightbulb", emojis: "⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🖲️ 🕹️ 🗜️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ 🎚️ 🎛️ 🧭 ⏱️ ⏲️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🔌 💡 🔦 🕯️ 🧯 🛢️ 💸 💵 💴 💶 💷 💰 💳 💎 ⚖️ 🧰 🔧 🔨 ⚒️ 🛠️ ⛏️ 🔩 ⚙️ 🧱 ⛓️ 🧲 🔫 💣 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ ⚱️ 🏺 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🧺 🧻 🚽 🚰 🚿 🛁 🛀 🧼 🪒 🧽 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🛌 🧸 🖼️ 🛍️ 🛒 🎏 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 📪 📫 📬 📭 📮 📯 📜 📃 📄 📑 🧾 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓" },
+  { id: "symbols", label: "Símbolos", icon: "bi-heart", emojis: "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ ☢️ ☣️ 📴 📳 ✴️ 🆚 💮 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 〽️ ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 🚻 🚮 🎦 📶 🔣 ℹ️ 🔤 🔡 🔠 🆖 🆗 🆙 🆒 🆕 🆓 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 🔢 #️⃣ *️⃣ ▶️ ⏸️ ⏯️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ ⏫ ⏬ ◀️ 🔼 🔽 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔀 🔁 🔂 🔄 🔃 🎵 🎶 ➕ ➖ ➗ ✖️ ♾️ 💲 💱 ™️ ©️ ®️ 〰️ ➰ ➿ 🔚 🔙 🔛 🔝 🔜 ✔️ ☑️ 🔘 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ 🟤 🔺 🔻 🔸 🔹 🔶 🔷 🔳 🔲 ▪️ ▫️ ◾ ◽ ◼️ ◻️ 🟥 🟧 🟨 🟩 🟦 🟪 ⬛ ⬜ 🟫 🔈 🔇 🔉 🔊 🔔 🔕 📣 📢 💬 💭 🗯️ ♠️ ♣️ ♥️ ♦️ 🃏 🎴 🀄" },
+  { id: "flags", label: "Bandeiras", icon: "bi-flag", emojis: "🇧🇷 🇵🇹 🇦🇴 🇲🇿 🇨🇻 🇺🇸 🇬🇧 🇦🇷 🇨🇱 🇺🇾 🇵🇾 🇧🇴 🇵🇪 🇨🇴 🇻🇪 🇪🇨 🇲🇽 🇨🇦 🇪🇸 🇫🇷 🇩🇪 🇮🇹 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇮🇪 🇵🇱 🇺🇦 🇷🇺 🇹🇷 🇬🇷 🇮🇱 🇪🇬 🇿🇦 🇳🇬 🇯🇵 🇰🇷 🇨🇳 🇮🇳 🇦🇺 🇳🇿 🇪🇺 🇺🇳 🏳️ 🏴 🏁 🚩 🏳️‍🌈 🏳️‍⚧️ 🏴‍☠️" },
+];
+for (const c of EMOJI_CATEGORIES) {
+  if (typeof c.emojis === "string") c.emojis = c.emojis.split(" ");
+}
+
+let emojiPickerMode = null; // "compose" | "react"
+let emojiPickerOnPick = null;
+let emojiPickerCategory = null;
+
+function loadRecentEmojis() {
+  try {
+    const list = JSON.parse(localStorage.getItem(EMOJI_RECENT_KEY) || "[]");
+    return Array.isArray(list) ? list.filter(e => typeof e === "string").slice(0, EMOJI_RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberEmoji(emoji) {
+  const next = [emoji, ...loadRecentEmojis().filter(e => e !== emoji)].slice(0, EMOJI_RECENT_MAX);
+  try {
+    localStorage.setItem(EMOJI_RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked — recents just aren't remembered.
+  }
+}
+
+function renderEmojiPicker(categoryId) {
+  emojiPickerCategory = categoryId;
+  const category = EMOJI_CATEGORIES.find(c => c.id === categoryId) || EMOJI_CATEGORIES[1];
+  const emojis = category.id === "recent" ? loadRecentEmojis() : category.emojis;
+
+  emojiPickerTabs.innerHTML = "";
+  for (const c of EMOJI_CATEGORIES) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = `emoji-picker-tab${c.id === category.id ? " active" : ""}`;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(c.id === category.id));
+    tab.setAttribute("aria-label", c.label);
+    tab.title = c.label;
+    tab.innerHTML = `<i class="bi ${c.icon}"></i>`;
+    tab.addEventListener("click", (e) => {
+      e.stopPropagation();
+      renderEmojiPicker(c.id);
+    });
+    emojiPickerTabs.appendChild(tab);
+  }
+
+  emojiPickerTitle.textContent = category.label;
+  emojiPickerGrid.innerHTML = "";
+  emojiPickerGrid.scrollTop = 0;
+  if (!emojis.length) {
+    const empty = document.createElement("div");
+    empty.className = "emoji-picker-empty";
+    empty.textContent = "Nenhum emoji recente";
+    emojiPickerGrid.appendChild(empty);
+    return;
+  }
+  for (const emoji of emojis) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.emoji = emoji;
+    btn.textContent = emoji;
+    emojiPickerGrid.appendChild(btn);
+  }
+}
+
+/** Places a fixed popover above `anchor` (below if no room), kept inside the viewport. */
+function positionPopover(el, anchor, align = "end") {
+  const rect = anchor.getBoundingClientRect();
+  const margin = 8;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  let top = rect.top - h - margin;
+  if (top < margin) top = rect.bottom + margin;
+  top = Math.max(margin, Math.min(top, window.innerHeight - h - margin));
+  let left = align === "start" ? rect.left : rect.right - w;
+  left = Math.max(margin, Math.min(left, window.innerWidth - w - margin));
+  el.style.top = `${top}px`;
+  el.style.left = `${left}px`;
+}
+
+function openEmojiPicker(anchor, mode, onPick, align = "end") {
+  closeReactBar();
+  emojiPickerMode = mode;
+  emojiPickerOnPick = onPick;
+  renderEmojiPicker(loadRecentEmojis().length ? "recent" : "smileys");
+  emojiPicker.hidden = false;
+  positionPopover(emojiPicker, anchor, align);
+  dmEmojiBtn.setAttribute("aria-expanded", String(mode === "compose"));
+}
+
+function closeEmojiPicker() {
+  if (emojiPicker.hidden) return;
+  emojiPicker.hidden = true;
+  emojiPickerMode = null;
+  emojiPickerOnPick = null;
+  dmEmojiBtn.setAttribute("aria-expanded", "false");
+}
+
+emojiPickerGrid.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-emoji]");
+  if (!btn) return;
+  e.stopPropagation();
+  const emoji = btn.dataset.emoji;
+  rememberEmoji(emoji);
+  emojiPickerOnPick?.(emoji);
+});
+
+function insertEmojiIntoInput(emoji) {
+  const start = dmInput.selectionStart ?? dmInput.value.length;
+  const end = dmInput.selectionEnd ?? start;
+  dmInput.setRangeText(emoji, start, end, "end");
+  dmInput.focus();
+  dmInput.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+dmEmojiBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (emojiPickerMode === "compose") {
+    closeEmojiPicker();
+    dmInput.focus();
+    return;
+  }
+  openEmojiPicker(dmEmojiBtn, "compose", insertEmojiIntoInput);
+});
+
+function myReaction(message) {
+  return (message.reactions || []).find(r => r.userId === me?.userId)?.emoji || null;
+}
+
+function openReactBar(message, anchor, isOwn) {
+  closeEmojiPicker();
+  const current = myReaction(message);
+  const align = isOwn ? "end" : "start";
+  dmReactBar.innerHTML = "";
+
+  for (const emoji of QUICK_REACTIONS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.setAttribute("role", "menuitem");
+    btn.setAttribute("aria-label", `Reagir com ${emoji}`);
+    btn.textContent = emoji;
+    if (emoji === current) btn.classList.add("active");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeReactBar();
+      reactToMessage(message, emoji === current ? null : emoji);
+    });
+    dmReactBar.appendChild(btn);
+  }
+
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "dm-react-more";
+  more.setAttribute("role", "menuitem");
+  more.setAttribute("aria-label", "Mais emojis");
+  more.innerHTML = '<i class="bi bi-plus-lg"></i>';
+  more.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openEmojiPicker(anchor, "react", (emoji) => {
+      closeEmojiPicker();
+      reactToMessage(message, emoji === current ? null : emoji);
+    }, align);
+  });
+  dmReactBar.appendChild(more);
+
+  dmReactBar.hidden = false;
+  positionPopover(dmReactBar, anchor, align);
+}
+
+function closeReactBar() {
+  dmReactBar.hidden = true;
+}
+
+function closeReactionPopovers() {
+  closeReactBar();
+  if (emojiPickerMode === "react") closeEmojiPicker();
+}
+
+function reactionsKey(message) {
+  return JSON.stringify(message.reactions || []);
+}
+
+async function reactToMessage(message, emoji) {
+  if (!me || !isServerId(message.id)) return;
+  const previous = message.reactions || [];
+  const others = previous.filter(r => r.userId !== me.userId);
+  message.reactions = emoji ? [...others, { userId: me.userId, emoji }] : others;
+  message.reactionPending = true;
+  if (emoji) rememberEmoji(emoji);
+  renderMessages({ scroll: "auto" });
+  trackAppActivity("react_message");
+
+  try {
+    const r = await authFetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "react", messageId: message.id, emoji }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "react failed");
+    message.reactions = data.reactions || [];
+  } catch (e) {
+    console.warn("[app] react:", e);
+    message.reactions = previous;
+    showImageError("Falha ao reagir.");
+  } finally {
+    message.reactionPending = false;
+  }
+  if (messageList.includes(message)) renderMessages({ scroll: "auto" });
+}
+
+/** WhatsApp-style pill hanging off the bubble's bottom edge. */
+function createReactionsPill(message) {
+  const reactions = message.reactions || [];
+  const pill = document.createElement("button");
+  pill.type = "button";
+  pill.className = "dm-reactions";
+
+  const counts = new Map();
+  for (const r of reactions) counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1);
+  for (const emoji of counts.keys()) {
+    const span = document.createElement("span");
+    span.textContent = emoji;
+    pill.appendChild(span);
+  }
+  if (reactions.length > 1) {
+    const count = document.createElement("span");
+    count.className = "dm-reactions-count";
+    count.textContent = String(reactions.length);
+    pill.appendChild(count);
+  }
+
+  const mine = myReaction(message);
+  if (mine) pill.classList.add("mine");
+  const who = reactions.map(r => {
+    const name = r.userId === me.userId ? "Você" : displayName(selectedUser?.userId === r.userId ? selectedUser : { username: "?" });
+    return `${name}: ${r.emoji}`;
+  });
+  pill.title = mine ? `${who.join("\n")}\nClique para remover sua reação` : who.join("\n");
+  pill.setAttribute("aria-label", `Reações: ${who.join(", ")}`);
+
+  pill.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (mine) {
+      reactToMessage(message, null);
+    } else {
+      const bubble = pill.closest(".dm-bubble");
+      openReactBar(message, pill, bubble?.classList.contains("own"));
+    }
+  });
+  return pill;
+}
+
 function formatDayLabel(isoString) {
   const d = new Date(isoString);
   const now = new Date();
@@ -1355,6 +1647,7 @@ function makeTempMessage(content, replyToId) {
     mediaWidth: null,
     mediaHeight: null,
     mediaDurationMs: null,
+    reactions: [],
     replyTo,
     replyToId: replyToId ?? null,
   };
@@ -1490,6 +1783,24 @@ function renderMessages(options = {}) {
       setReply(m);
     });
     bubble.appendChild(replyBtn);
+
+    if (isServerId(m.id)) {
+      const reactBtn = document.createElement("button");
+      reactBtn.type = "button";
+      reactBtn.className = "dm-react-btn";
+      reactBtn.setAttribute("aria-label", "Reagir");
+      reactBtn.innerHTML = '<i class="bi bi-emoji-smile"></i>';
+      reactBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openReactBar(m, reactBtn, isOwn);
+      });
+      bubble.appendChild(reactBtn);
+    }
+
+    if (m.reactions?.length) {
+      bubble.classList.add("has-reactions");
+      bubble.appendChild(createReactionsPill(m));
+    }
 
     dmMessages.appendChild(bubble);
   }
@@ -1884,14 +2195,20 @@ async function pollConversation() {
       }
 
       let readAtChanged = false;
+      let reactionsChanged = false;
       const newMessages = [];
 
       for (const m of fetched) {
         const idx = indexById.get(m.id);
         if (idx !== undefined) {
-          if (messageList[idx].readAt !== m.readAt) {
-            messageList[idx].readAt = m.readAt;
+          const local = messageList[idx];
+          if (local.readAt !== m.readAt) {
+            local.readAt = m.readAt;
             readAtChanged = true;
+          }
+          if (!local.reactionPending && reactionsKey(local) !== reactionsKey(m)) {
+            local.reactions = m.reactions || [];
+            reactionsChanged = true;
           }
         } else if (isServerId(m.id) && (lastMessageId == null || m.id > lastMessageId)) {
           newMessages.push(m);
@@ -1925,7 +2242,7 @@ async function pollConversation() {
         }
       }
 
-      if (readAtChanged || newMessages.length > 0) {
+      if (readAtChanged || reactionsChanged || newMessages.length > 0) {
         renderMessages({ scroll: "auto" });
       }
     }
@@ -2725,6 +3042,17 @@ async function unfriendContact() {
 
 contactPanelUnfriend.addEventListener("click", unfriendContact);
 
+// Close the emoji picker / reaction bar when clicking outside them.
+document.addEventListener("click", (e) => {
+  if (!dmReactBar.hidden && !dmReactBar.contains(e.target)) closeReactBar();
+  if (!emojiPicker.hidden && !emojiPicker.contains(e.target) && !dmEmojiBtn.contains(e.target)) closeEmojiPicker();
+});
+
+window.addEventListener("resize", () => {
+  closeReactBar();
+  closeEmojiPicker();
+});
+
 // Close bubble when clicking outside.
 document.addEventListener("click", (e) => {
   if (!bubbleUser) return;
@@ -2742,6 +3070,20 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key !== "Escape") return;
+
+  if (!dmReactBar.hidden) {
+    e.preventDefault();
+    closeReactBar();
+    return;
+  }
+
+  if (!emojiPicker.hidden) {
+    e.preventDefault();
+    const wasCompose = emojiPickerMode === "compose";
+    closeEmojiPicker();
+    if (wasCompose) dmInput.focus();
+    return;
+  }
 
   if (!logoutConfirm.hidden) {
     e.preventDefault();
@@ -2804,6 +3146,7 @@ dmMessages.addEventListener("keydown", (e) => {
 dmMessages.addEventListener(
   "scroll",
   () => {
+    closeReactionPopovers();
     if (noMoreOlder || loadingOlder || messageList.length === 0) return;
     if (dmMessages.scrollTop <= LOAD_OLDER_THRESHOLD) {
       loadOlder();
