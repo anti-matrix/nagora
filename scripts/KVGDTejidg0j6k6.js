@@ -72,9 +72,14 @@
     if (activityBuffer.length > MAX_ACTIVITIES) activityBuffer.shift();
   }
 
+  const AWAY_AFTER_MS = 90 * 1000;
+
   window.__NAGORA_ACTIVITY__ = {
     track: trackActivity,
+    awayAfterMs: AWAY_AFTER_MS,
     get lastActivityAt() { return lastActivityAt; },
+    get idleMs() { return Date.now() - lastActivityAt; },
+    get away() { return Date.now() - lastActivityAt >= AWAY_AFTER_MS; },
     get activities() { return activityBuffer.slice(); },
   };
 

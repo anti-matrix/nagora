@@ -443,6 +443,17 @@ function displayName(u) {
   return u.showname || u.username;
 }
 
+// Presence: "online" | "away" (idle ≥ 90s, app open) | "offline".
+const STATUS_LABELS = { online: "online", away: "ausente", offline: "offline" };
+
+function userStatus(u) {
+  return u?.status || (u?.online ? "online" : "offline");
+}
+
+function amAway() {
+  return !!window.__NAGORA_ACTIVITY__?.away;
+}
+
 function trackAppActivity(type) {
   if (window.__NAGORA_ACTIVITY__?.track) {
     window.__NAGORA_ACTIVITY__.track(type);
@@ -625,7 +636,7 @@ async function fetchUnread() {
       for (const [senderId, { count }] of newUnread) {
         const prev = social.unread.get(senderId);
         const prevCount = prev ? prev.count : 0;
-        if (count > prevCount && senderId !== selectedUser?.userId) {
+        if (count > prevCount && (senderId !== selectedUser?.userId || amAway())) {
           playNotificationSound();
           break;
         }
@@ -717,8 +728,8 @@ function renderUsers(users) {
     setAvatarOrFallback(avatarWrap, u.userId, u.hasAvatar, "");
 
     const dot = document.createElement("span");
-    dot.className = `status-dot ${u.online ? "online" : "offline"}`;
-    dot.title = u.online ? "online" : "offline";
+    dot.className = `status-dot ${userStatus(u)}`;
+    dot.title = STATUS_LABELS[userStatus(u)];
 
     const name = document.createElement("span");
     name.className = "username";
@@ -802,7 +813,7 @@ async function selectUser(user) {
   dmUsername.textContent = displayName(user);
   dmUsername.dataset.userid = user.userId;
   setAvatarOrFallback(dmHeaderAvatar, user.userId, user.hasAvatar, "avatar-img");
-  dmStatus.className = `status-dot ${user.online ? "online" : "offline"}`;
+  dmStatus.className = `status-dot ${userStatus(user)}`;
   dmTyping.textContent = "";
   dmMessages.innerHTML = "";
   dmMessages.classList.remove("loading-older");
@@ -1530,10 +1541,15 @@ async function pollConversation() {
     if (epoch !== conversationEpoch) return;
 
     if (typeof data.recipientOnline === "boolean" && selectedUser) {
+      const status = data.recipientStatus || (data.recipientOnline ? "online" : "offline");
       selectedUser.online = data.recipientOnline;
+      selectedUser.status = status;
       const cached = usersCache.find(u => u.userId === selectedUser.userId);
-      if (cached) cached.online = data.recipientOnline;
-      dmStatus.className = `status-dot ${data.recipientOnline ? "online" : "offline"}`;
+      if (cached) {
+        cached.online = data.recipientOnline;
+        cached.status = status;
+      }
+      dmStatus.className = `status-dot ${status}`;
     }
 
     const fetched = data.messages || [];
@@ -1575,6 +1591,8 @@ async function pollConversation() {
         lastMessageId = maxServerId(messageList);
 
         if (newMessages.some(m => m.senderId === selectedUser.userId)) {
+          // Away: notify even though this conversation is open.
+          if (amAway()) playNotificationSound();
           markRead(selectedUser.userId);
           social.unread.delete(selectedUser.userId);
           renderUsers(usersCache);
@@ -2285,8 +2303,8 @@ function populateContactPanel() {
   if (!selectedUser) return;
   contactName.textContent = displayName(selectedUser);
   contactHandle.textContent = `@${selectedUser.username}`;
-  contactStatus.textContent = selectedUser.online ? "online" : "offline";
-  contactStatus.className = `contact-panel-status ${selectedUser.online ? "online" : ""}`;
+  contactStatus.textContent = STATUS_LABELS[userStatus(selectedUser)];
+  contactStatus.className = `contact-panel-status ${userStatus(selectedUser)}`;
   setAvatarOrFallback(contactPanelAvatar, selectedUser.userId, selectedUser.hasAvatar, "");
   contactLastSeen.textContent = "";
 
@@ -2299,8 +2317,8 @@ function populateContactPanel() {
       contactName.textContent = data.showname || data.username || displayName(selectedUser);
       contactHandle.textContent = data.username ? `@${data.username}` : `@${selectedUser.username}`;
       if (data.online != null) {
-        contactStatus.textContent = data.online ? "online" : "offline";
-        contactStatus.className = `contact-panel-status ${data.online ? "online" : ""}`;
+        contactStatus.textContent = STATUS_LABELS[userStatus(data)];
+        contactStatus.className = `contact-panel-status ${userStatus(data)}`;
       }
       contactAccountCreatedValue.textContent = data.accountCreatedAt
         ? new Date(data.accountCreatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -2442,10 +2460,14 @@ dmMessages.addEventListener(
   { passive: true }
 );
 
+// While idle, a keepalive every 30s keeps the user "away" (app open) instead of offline.
+const PRESENCE_KEEPALIVE_MS = 30000;
+
 async function maybeSendPresence() {
   const activity = window.__NAGORA_ACTIVITY__;
   const lastActivity = activity ? activity.lastActivityAt : 0;
-  if (!lastActivity || lastActivity <= lastPresenceAt) return;
+  const active = !!lastActivity && lastActivity > lastPresenceAt && !amAway();
+  if (!active && Date.now() - lastPresenceAt < PRESENCE_KEEPALIVE_MS) return;
 
   lastPresenceAt = Date.now();
   try {
@@ -2453,6 +2475,7 @@ async function maybeSendPresence() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      body: JSON.stringify({ active }),
     });
     if (r.ok) {
       const data = await r.json();
