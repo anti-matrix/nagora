@@ -52,12 +52,20 @@
   const ACTIVITY_UPDATE_MS = 5000;
   const activityBuffer = [];
   const rawCooldowns = new Map();
+  const AWAY_AFTER_MS = 90 * 1000;
   let lastActivityAt = Date.now();
   let lastActivitySentAt = 0;
 
+  // Fires "nagora:active" on window when the user comes back from away.
+  function markActive(now) {
+    const wasAway = now - lastActivityAt >= AWAY_AFTER_MS;
+    lastActivityAt = now;
+    if (wasAway) window.dispatchEvent(new Event("nagora:active"));
+  }
+
   function pushRawActivity(type) {
     const now = Date.now();
-    lastActivityAt = now;
+    markActive(now);
     const last = rawCooldowns.get(type);
     if (last && now - last < 1000) return;
     rawCooldowns.set(type, now);
@@ -67,12 +75,10 @@
 
   function trackActivity(type) {
     const now = Date.now();
-    lastActivityAt = now;
+    markActive(now);
     activityBuffer.push({ type, at: now });
     if (activityBuffer.length > MAX_ACTIVITIES) activityBuffer.shift();
   }
-
-  const AWAY_AFTER_MS = 90 * 1000;
 
   window.__NAGORA_ACTIVITY__ = {
     track: trackActivity,

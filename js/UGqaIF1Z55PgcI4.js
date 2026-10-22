@@ -68,15 +68,17 @@
                     <button type="button" class="dm-reply-cancel" id="dm-reply-cancel" aria-label="Cancelar resposta"><i class="bi bi-x"></i></button>
                 </div>
                 <div class="dm-messages" id="dm-messages" tabindex="-1"></div>
+                <div class="dm-upload-status" id="dm-upload-status" hidden></div>
                 <div class="dm-composer">
                     <input type="file" id="dm-image-input" accept="image/*" hidden />
                     <input type="file" id="dm-audio-input" accept="audio/*" hidden />
+                    <input type="file" id="dm-video-input" accept="video/*" hidden />
                     <div class="dm-attach-wrap">
                         <button type="button" class="dm-attach-btn" id="dm-attach" aria-label="Anexo"><i class="bi bi-paperclip"></i></button>
                         <div class="dm-attach-menu" id="dm-attach-menu">
                             <button type="button" id="dm-image-btn"><i class="bi bi-image"></i> Imagem</button>
                             <button type="button" id="dm-audio-file-btn"><i class="bi bi-mic"></i> Áudio</button>
-                            <button type="button" disabled title="em breve"><i class="bi bi-camera-video"></i> Vídeo</button>
+                            <button type="button" id="dm-video-btn"><i class="bi bi-camera-video"></i> Vídeo</button>
                         </div>
                     </div>
                     <textarea class="dm-input" id="dm-input" rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
@@ -129,7 +131,7 @@
                     </div>
                     <div class="contact-media-section" id="contact-media-video-section">
                         <h5>Vídeos</h5>
-                        <div class="contact-media-empty">em breve</div>
+                        <div class="contact-media-list" id="contact-media-videos"></div>
                     </div>
                 </div>
             </div>
@@ -353,6 +355,9 @@ const dmImageInput = document.getElementById("dm-image-input");
 const dmImageBtn = document.getElementById("dm-image-btn");
 const dmAudioFileBtn = document.getElementById("dm-audio-file-btn");
 const dmAudioInput = document.getElementById("dm-audio-input");
+const dmVideoBtn = document.getElementById("dm-video-btn");
+const dmVideoInput = document.getElementById("dm-video-input");
+const dmUploadStatus = document.getElementById("dm-upload-status");
 const dmLightbox = document.getElementById("dm-lightbox");
 const dmLightboxImg = document.getElementById("dm-lightbox-img");
 const dmLightboxClose = document.getElementById("dm-lightbox-close");
@@ -436,6 +441,8 @@ const contactMediaAudios = document.getElementById("contact-media-audios");
 const contactMediaEmpty = document.getElementById("contact-media-empty");
 const contactMediaImagesSection = document.getElementById("contact-media-images-section");
 const contactMediaAudioSection = document.getElementById("contact-media-audio-section");
+const contactMediaVideos = document.getElementById("contact-media-videos");
+const contactMediaVideoSection = document.getElementById("contact-media-video-section");
 
 const URL_RE = /https:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
@@ -603,7 +610,7 @@ function unreadMapsDiffer(a, b) {
   return false;
 }
 
-async function fetchUnread() {
+async function fetchUnread({ force = false } = {}) {
   if (!me) return;
 
   const now = Date.now();
@@ -612,12 +619,12 @@ async function fetchUnread() {
 
   // Gate: when active, only poll if at least one friend is online.
   // When idle, fall back to the existing idle throttle so unread is still caught up.
-  if (!isIdle && !lastPresenceAnyFriendOnline) {
+  if (!force && !isIdle && !lastPresenceAnyFriendOnline) {
     return;
   }
 
   // Gate: throttle unread polling when the user has been idle.
-  if (isIdle && now - lastUnreadFetchAt < UNREAD_IDLE_POLL_MS) {
+  if (!force && isIdle && now - lastUnreadFetchAt < UNREAD_IDLE_POLL_MS) {
     return;
   }
   lastUnreadFetchAt = now;
@@ -890,6 +897,7 @@ function snippet(replyTo) {
   }
   if (replyTo.mediaType?.startsWith("image/")) return "(imagem)";
   if (replyTo.mediaType?.startsWith("audio/")) return "(áudio)";
+  if (replyTo.mediaType?.startsWith("video/")) return "(vídeo)";
   return "(mídia)";
 }
 
@@ -981,6 +989,309 @@ function createAudioBubble(message) {
   duration.textContent = message.mediaDurationMs ? formatAudioDuration(message.mediaDurationMs) : "0:00";
   wrap.appendChild(audio);
   wrap.appendChild(duration);
+  return wrap;
+}
+
+// ── Video ───────────────────────────────────────────────────────────────
+// Vercel serverless has no ffmpeg, so videos are re-encoded in the browser:
+// the file plays into a ≤480p canvas that MediaRecorder encodes (H.264/MP4
+// where supported — plays everywhere — else VP9/VP8 WebM). Files already
+// ≤480p at a sane bitrate are sent untouched. Uploads go in chunks and
+// downloads in 4 MB parts because Vercel caps bodies at 4.5 MB.
+const VIDEO_MAX_SHORT_SIDE = 480;
+const VIDEO_MAX_LONG_SIDE = 854;
+const VIDEO_MAX_DURATION_MS = 3 * 60 * 1000;
+const VIDEO_MAX_BYTES = 16 * 1024 * 1024;
+const VIDEO_BITRATE = 700000;
+const VIDEO_AUDIO_BITRATE = 64000;
+const VIDEO_UPLOAD_CHUNK_BYTES = 2.5 * 1024 * 1024;
+const VIDEO_MIME_CANDIDATES = [
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4",
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+];
+
+function setUploadStatus(text) {
+  dmUploadStatus.textContent = text || "";
+  dmUploadStatus.hidden = !text;
+}
+
+function fitVideoSize(w, h) {
+  const scale = Math.min(1, VIDEO_MAX_SHORT_SIDE / Math.min(w, h), VIDEO_MAX_LONG_SIDE / Math.max(w, h));
+  const even = n => Math.max(2, Math.round((n * scale) / 2) * 2);
+  return { width: even(w), height: even(h) };
+}
+
+function waitForEvent(target, name) {
+  return new Promise(resolve => target.addEventListener(name, resolve, { once: true }));
+}
+
+async function compressVideo(file, onProgress) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  // Attached (but invisible) so browsers keep decoding frames for the canvas.
+  video.style.cssText = "position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;";
+  video.playsInline = true;
+  video.preload = "auto";
+  document.body.appendChild(video);
+
+  let audioCtx = null;
+  try {
+    video.src = url;
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(new Error("Formato de vídeo não suportado."));
+    });
+
+    // Browser-recorded WebM often has no duration header (Infinity) until seeked to the end.
+    if (video.duration === Infinity) {
+      video.currentTime = 1e9;
+      await waitForEvent(video, "seeked");
+    }
+
+    const durationMs = Math.round(video.duration * 1000);
+    if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error("Formato de vídeo não suportado.");
+    if (durationMs > VIDEO_MAX_DURATION_MS) throw new Error("Vídeo muito longo (máx. 3 min).");
+
+    const srcW = video.videoWidth;
+    const srcH = video.videoHeight;
+    const { width, height } = fitVideoSize(srcW, srcH);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    video.currentTime = Math.min(0.1, video.duration / 2);
+    await waitForEvent(video, "seeked");
+    ctx.drawImage(video, 0, 0, width, height);
+    const thumbBase64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+
+    const bitrate = (file.size * 8) / (durationMs / 1000);
+    const passthrough = /^video\/(mp4|webm)$/.test(file.type)
+      && Math.min(srcW, srcH) <= VIDEO_MAX_SHORT_SIDE
+      && Math.max(srcW, srcH) <= VIDEO_MAX_LONG_SIDE
+      && bitrate <= VIDEO_BITRATE * 1.5
+      && file.size <= VIDEO_MAX_BYTES;
+    if (passthrough) {
+      return { blob: file, mimeType: file.type, width: srcW, height: srcH, durationMs, thumbBase64 };
+    }
+
+    const recorderType = window.MediaRecorder && canvas.captureStream
+      ? VIDEO_MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported(t))
+      : null;
+    if (!recorderType) throw new Error("Seu navegador não suporta compressão de vídeo.");
+    const mimeType = recorderType.split(";")[0];
+
+    const stream = canvas.captureStream(30);
+    try {
+      // resume() never settles without a prior user gesture — cap the wait and
+      // send the video without sound rather than hang.
+      audioCtx = new AudioContext();
+      await Promise.race([audioCtx.resume(), new Promise(r => setTimeout(r, 1000))]);
+      if (audioCtx.state === "running") {
+        const dest = audioCtx.createMediaStreamDestination();
+        audioCtx.createMediaElementSource(video).connect(dest);
+        for (const track of dest.stream.getAudioTracks()) stream.addTrack(track);
+      }
+    } catch {
+      // No Web Audio — the video is sent without sound.
+    }
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: recorderType,
+      videoBitsPerSecond: VIDEO_BITRATE,
+      audioBitsPerSecond: VIDEO_AUDIO_BITRATE,
+    });
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const stopped = waitForEvent(recorder, "stop");
+
+    video.currentTime = 0;
+    await waitForEvent(video, "seeked");
+
+    // A plain 30 fps timer: rAF / requestVideoFrameCallback get throttled to a
+    // few fps in occluded windows and stop entirely in background tabs.
+    let drawing = true;
+    const draw = () => {
+      if (!drawing) return;
+      ctx.drawImage(video, 0, 0, width, height);
+      onProgress?.(video.currentTime / video.duration);
+      setTimeout(draw, 1000 / 30);
+    };
+
+    const ended = waitForEvent(video, "ended");
+    recorder.start(1000);
+    try {
+      await video.play();
+    } catch {
+      video.muted = true;
+      await video.play();
+    }
+    draw();
+    await ended;
+    drawing = false;
+    recorder.stop();
+    await stopped;
+    for (const track of stream.getTracks()) track.stop();
+
+    const blob = new Blob(chunks, { type: mimeType });
+    if (blob.size > VIDEO_MAX_BYTES) throw new Error("Vídeo muito grande (máx. 16 MB após compressão).");
+    return { blob, mimeType, width, height, durationMs, thumbBase64 };
+  } finally {
+    audioCtx?.close().catch(() => {});
+    video.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function postFileJson(body) {
+  const r = await authFetch("/api/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || "upload failed");
+  return data;
+}
+
+async function uploadVideo(result, { recipient, replyTo }, onProgress) {
+  const { blob } = result;
+  let uploadId = null;
+  for (let offset = 0; offset < blob.size; offset += VIDEO_UPLOAD_CHUNK_BYTES) {
+    const chunkBase64 = await fileToBase64(blob.slice(offset, offset + VIDEO_UPLOAD_CHUNK_BYTES));
+    const data = await postFileJson({ action: "videoChunk", uploadId, chunkBase64 });
+    uploadId = data.uploadId;
+    onProgress?.(Math.min(1, (offset + VIDEO_UPLOAD_CHUNK_BYTES) / blob.size));
+  }
+
+  await postFileJson({
+    action: "videoFinish",
+    uploadId,
+    recipientUserId: recipient.userId,
+    mediaType: result.mimeType,
+    width: result.width,
+    height: result.height,
+    durationMs: result.durationMs,
+    thumbBase64: result.thumbBase64,
+    replyToId: replyTo?.id,
+  });
+  if (replyTo && replyingTo === replyTo) clearReply();
+  trackAppActivity("send_media");
+  if (selectedUser?.userId === recipient.userId) await pollConversation();
+}
+
+let videoUploadBusy = false;
+
+async function sendVideoFile(file) {
+  if (!file || !selectedUser) return;
+  if (!file.type.startsWith("video/")) {
+    showImageError("Apenas vídeos são permitidos.");
+    return;
+  }
+  if (videoUploadBusy) {
+    showImageError("Aguarde o vídeo anterior terminar.");
+    return;
+  }
+
+  // Compression can take as long as the video; pin the target conversation now.
+  const target = { recipient: selectedUser, replyTo: replyingTo };
+  videoUploadBusy = true;
+  try {
+    setUploadStatus("Processando vídeo…");
+    const result = await compressVideo(file, (p) => {
+      setUploadStatus(`Processando vídeo… ${Math.round(p * 100)}% (mantenha esta aba aberta)`);
+    });
+    setUploadStatus("Enviando vídeo…");
+    await uploadVideo(result, target, (p) => setUploadStatus(`Enviando vídeo… ${Math.round(p * 100)}%`));
+  } catch (e) {
+    console.warn("[app] video upload:", e);
+    showImageError(e.message || "Falha ao enviar vídeo.");
+  } finally {
+    videoUploadBusy = false;
+    setUploadStatus("");
+  }
+}
+
+function fetchVideoBlobUrl(message) {
+  const key = `${fileUrl(message.id)}&video=1`;
+  if (!mediaBlobCache.has(key)) {
+    const p = (async () => {
+      const first = await authFetch(`${fileUrl(message.id)}&part=0`, { credentials: "include" });
+      if (!first.ok) throw new Error(`video ${first.status}`);
+      const parts = Number(first.headers.get("X-Media-Parts")) || 1;
+      const blobs = [await first.blob()];
+      for (let i = 1; i < parts; i++) {
+        const r = await authFetch(`${fileUrl(message.id)}&part=${i}`, { credentials: "include" });
+        if (!r.ok) throw new Error(`video ${r.status}`);
+        blobs.push(await r.blob());
+      }
+      return URL.createObjectURL(new Blob(blobs, { type: message.mediaType }));
+    })().catch(err => {
+      mediaBlobCache.delete(key);
+      throw err;
+    });
+    mediaBlobCache.set(key, p);
+  }
+  return mediaBlobCache.get(key);
+}
+
+/** Thumbnail + play button; the video itself is only downloaded on click. */
+function createVideoBubble(message) {
+  const wrap = document.createElement("div");
+  wrap.className = "dm-media-wrap dm-video-wrap";
+  if (message.mediaWidth && message.mediaHeight) {
+    wrap.style.aspectRatio = `${message.mediaWidth} / ${message.mediaHeight}`;
+  }
+
+  const thumb = document.createElement("img");
+  thumb.alt = "Vídeo";
+  thumb.addEventListener("load", () => wrap.classList.add("loaded"));
+  thumb.addEventListener("error", () => wrap.classList.add("loaded", "no-thumb"));
+  setAuthedSrc(thumb, `${fileUrl(message.id)}&thumb=1`, { lazy: true });
+
+  const spinner = document.createElement("div");
+  spinner.className = "dm-image-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+
+  const error = document.createElement("div");
+  error.className = "dm-image-error";
+  error.textContent = "Falha ao carregar vídeo";
+
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "dm-video-play";
+  play.setAttribute("aria-label", "Reproduzir vídeo");
+  play.innerHTML = '<i class="bi bi-play-fill"></i>';
+
+  const duration = document.createElement("span");
+  duration.className = "dm-video-duration";
+  duration.textContent = message.mediaDurationMs ? formatAudioDuration(message.mediaDurationMs) : "";
+
+  play.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    wrap.classList.add("loading");
+    try {
+      const blobUrl = await fetchVideoBlobUrl(message);
+      const video = document.createElement("video");
+      video.controls = true;
+      video.playsInline = true;
+      video.src = blobUrl;
+      wrap.replaceChildren(video);
+      wrap.classList.remove("loading");
+      wrap.classList.add("playing");
+      video.play().catch(() => {});
+    } catch (err) {
+      console.warn("[app] video load:", err);
+      wrap.classList.remove("loading");
+      wrap.classList.add("error");
+    }
+  });
+
+  wrap.append(spinner, error, thumb, play, duration);
   return wrap;
 }
 
@@ -1132,6 +1443,8 @@ function renderMessages(options = {}) {
     if (m.mediaType) {
       if (m.mediaType.startsWith("audio/")) {
         bubble.appendChild(createAudioBubble(m));
+      } else if (m.mediaType.startsWith("video/")) {
+        bubble.appendChild(createVideoBubble(m));
       } else {
         bubble.appendChild(createImageBubble(m.id));
       }
@@ -1591,12 +1904,16 @@ async function pollConversation() {
         lastMessageId = maxServerId(messageList);
 
         if (newMessages.some(m => m.senderId === selectedUser.userId)) {
-          // Away: notify even though this conversation is open.
-          if (amAway()) playNotificationSound();
-          markRead(selectedUser.userId);
-          social.unread.delete(selectedUser.userId);
-          renderUsers(usersCache);
-          updateTitle();
+          if (amAway()) {
+            // Away: leave them unread (no "Visualizada") — fetchUnread plays the
+            // sound and counts them; they're marked read on "nagora:active".
+            fetchUnread({ force: true });
+          } else {
+            markRead(selectedUser.userId);
+            social.unread.delete(selectedUser.userId);
+            renderUsers(usersCache);
+            updateTitle();
+          }
         }
       }
 
@@ -1822,9 +2139,7 @@ dmImageBtn.addEventListener("click", () => {
   dmAttachMenu.classList.remove("open");
 });
 
-dmImageInput.addEventListener("change", async () => {
-  const file = dmImageInput.files?.[0];
-  dmImageInput.value = "";
+async function sendImageFile(file) {
   if (!file || !selectedUser) return;
 
   if (!file.type.startsWith("image/")) {
@@ -1839,6 +2154,36 @@ dmImageInput.addEventListener("change", async () => {
     console.warn("[app] image upload pipeline:", e);
     showImageError(e.message || "Falha ao enviar imagem.");
   }
+}
+
+dmImageInput.addEventListener("change", () => {
+  const file = dmImageInput.files?.[0];
+  dmImageInput.value = "";
+  sendImageFile(file);
+});
+
+// Ctrl+V an image into the message box sends it. Clipboards that also carry
+// text (e.g. spreadsheet cells) paste as text, as before.
+dmInput.addEventListener("paste", (e) => {
+  const data = e.clipboardData;
+  if (!data || !selectedUser) return;
+  if (data.getData("text/plain").trim()) return;
+  const item = [...data.items].find(i => i.kind === "file" && i.type.startsWith("image/"));
+  const file = item?.getAsFile();
+  if (!file) return;
+  e.preventDefault();
+  sendImageFile(file);
+});
+
+dmVideoBtn.addEventListener("click", () => {
+  dmVideoInput.click();
+  dmAttachMenu.classList.remove("open");
+});
+
+dmVideoInput.addEventListener("change", () => {
+  const file = dmVideoInput.files?.[0];
+  dmVideoInput.value = "";
+  sendVideoFile(file);
 });
 
 dmAudioFileBtn.addEventListener("click", () => {
@@ -1881,7 +2226,7 @@ dmAudio.addEventListener("contextmenu", (e) => e.preventDefault());
 // Open lightbox when any image inside a bubble is clicked.
 dmMessages.addEventListener("click", (e) => {
   const img = e.target.closest(".dm-bubble img");
-  if (!img) return;
+  if (!img || img.closest(".dm-video-wrap")) return;
   const bubble = img.closest(".dm-bubble");
   const messageId = bubble?.dataset.id;
   if (!messageId) return;
@@ -2232,13 +2577,20 @@ async function fetchMedia() {
 function renderMedia(media) {
   const images = media.filter(m => m.mediaType?.startsWith("image/"));
   const audios = media.filter(m => m.mediaType?.startsWith("audio/"));
+  const videos = media.filter(m => m.mediaType?.startsWith("video/"));
 
   contactMediaImages.innerHTML = "";
   contactMediaAudios.innerHTML = "";
+  contactMediaVideos.innerHTML = "";
 
   contactMediaImagesSection.hidden = images.length === 0;
   contactMediaAudioSection.hidden = audios.length === 0;
-  contactMediaEmpty.hidden = !(images.length === 0 && audios.length === 0);
+  contactMediaVideoSection.hidden = videos.length === 0;
+  contactMediaEmpty.hidden = !(images.length === 0 && audios.length === 0 && videos.length === 0);
+
+  for (const m of videos) {
+    contactMediaVideos.appendChild(createVideoBubble(m));
+  }
 
   for (const m of images) {
     const img = document.createElement("img");
@@ -2497,6 +2849,16 @@ document.addEventListener("visibilitychange", () => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && audioRecording) stopAudioRecording(false);
+});
+
+// Back from away: messages that arrived in the open conversation become "Visualizada" now.
+window.addEventListener("nagora:active", () => {
+  if (!selectedUser || document.visibilityState !== "visible") return;
+  if (!social.unread.has(selectedUser.userId)) return;
+  markRead(selectedUser.userId);
+  social.unread.delete(selectedUser.userId);
+  renderUsers(usersCache);
+  updateTitle();
 });
 
 document.addEventListener("DOMContentLoaded", async () => {

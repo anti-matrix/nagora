@@ -1316,6 +1316,75 @@ body {
   opacity: 0;
 }
 
+.dm-video-wrap {
+  max-height: 420px;
+  background: #000;
+}
+
+.dm-video-wrap.no-thumb {
+  background: #111;
+}
+
+.dm-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.dm-video-wrap.loading .dm-image-spinner {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dm-video-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dm-video-play:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.dm-video-wrap.loading .dm-video-play,
+.dm-video-wrap.error .dm-video-play {
+  display: none;
+}
+
+.dm-video-duration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.7rem;
+}
+
+.dm-upload-status {
+  color: #aaa;
+  font-size: 0.8rem;
+  padding: 4px 2px;
+}
+
+.dm-upload-status[hidden] {
+  display: none !important;
+}
+
 .dm-audio-btn.recording {
   background: #ff4444;
   border-color: #ff6666;
