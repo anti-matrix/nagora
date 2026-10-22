@@ -5,7 +5,7 @@ process.env.API_KEY_SEED ??= "smoke-test-seed";
 const { generateApiKey, generateAuthKey } = await import("../lib/apikey.js");
 const { hashPassword, verifyPassword } = await import("../lib/password.js");
 const { extractApiKey, isFromNagora } = await import("../lib/auth.js");
-const { signClientToken, verifyClientToken, sessionId } = await import("../lib/handshake.js");
+const { signClientToken, verifyClientToken } = await import("../lib/handshake.js");
 
 let passed = 0;
 async function ok(name, fn) {
@@ -70,16 +70,24 @@ await ok("isFromNagora rejects foreign Origin", () => {
 });
 
 console.log("handshake:");
-await ok("client token round-trips and binds to auth_key", () => {
-  const authKey = generateAuthKey("ABCDEFGHIJ", generateApiKey());
-  const payload = verifyClientToken(signClientToken({ auth_key: authKey }));
-  assert.equal(payload?.sid, sessionId(authKey));
+await ok("client token verifies only for the account it was signed for", () => {
+  const account = { auth_key: generateAuthKey("ABCDEFGHIJ", generateApiKey()) };
+  const other = { auth_key: generateAuthKey("ABCDEFGHIJ", generateApiKey()) };
+  const token = signClientToken(account);
+  assert.ok(verifyClientToken(token, account));
+  assert.equal(verifyClientToken(token, other), null);
+});
+await ok("client token carries nothing derived from auth_key", () => {
+  const account = { auth_key: generateAuthKey("ABCDEFGHIJ", generateApiKey()) };
+  const [payloadPart] = signClientToken(account).split(".");
+  const payload = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8"));
+  assert.deepEqual(Object.keys(payload).sort(), ["exp", "iat"]);
 });
 await ok("tampered client token is rejected", () => {
-  const token = signClientToken({ auth_key: "ngr-ath-x" });
-  const [, sig] = token.split(".");
-  const forged = Buffer.from(JSON.stringify({ sid: "other", iat: 0, exp: 9e9 })).toString("base64url");
-  assert.equal(verifyClientToken(`${forged}.${sig}`), null);
+  const account = { auth_key: "ngr-ath-x" };
+  const [, sig] = signClientToken(account).split(".");
+  const forged = Buffer.from(JSON.stringify({ iat: 0, exp: 9e9 })).toString("base64url");
+  assert.equal(verifyClientToken(`${forged}.${sig}`, account), null);
 });
 
 console.log(`\nAll ${passed} tests passed.`);

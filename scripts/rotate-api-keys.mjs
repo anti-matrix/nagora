@@ -5,11 +5,11 @@
  * One-time migration: regenerate every account's api_key as a random,
  * non-reversible token.
  *
- * Sessions are NOT affected: the `nagora_session` cookie holds accounts.auth_key,
- * not api_key. To log everyone out, also clear auth_key
- * (`UPDATE accounts SET auth_key = NULL`) — login regenerates it.
+ * WARNING: this logs everyone out — the `nagora_session` cookie holds the
+ * api_key, so rotated keys no longer match and users must log in again.
+ * (auth_key is server-only and signs the client token; it is not rotated here.)
  *
- * Safe to re-run; each run produces new keys.
+ * Safe to re-run; each run produces new keys and logs everyone out again.
  */
 import { query, ensureSchema, end } from "../lib/db.js";
 import { generateApiKey } from "../lib/apikey.js";
