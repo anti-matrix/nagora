@@ -1983,3 +1983,34 @@ body {
 .dm-react-bar .dm-react-more:hover {
   color: #fff;
 }
+
+/* Friend list failed to load */
+.user-list-error {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border: none;
+  border-bottom: 1px solid #ff4444;
+  color: #ff9999;
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.user-list-error:hover:not(:disabled) {
+  background: #222;
+}
+.user-list-error:disabled {
+  color: #888;
+  cursor: default;
+}
+.user-bubble-error {
+  color: #ff9999;
+  font-size: 0.85rem;
+}
+@media (pointer: coarse) {
+  .user-list-error {
+    min-height: 44px;
+  }
+}

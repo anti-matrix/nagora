@@ -212,6 +212,8 @@ let social = {
   outgoing: new Map(),
   friendSince: new Map(),
   unread: new Map(),
+  friendsLoaded: false, // false until the friend list has loaded at least once
+  friendsError: false,  // the last friend list request failed (after retries)
 };
 let searchTerm = "";
 let profileExpanded = false;
@@ -567,25 +569,54 @@ async function initSession() {
   }
 }
 
+const FRIENDS_RETRY_DELAYS_MS = [400, 1200];
+
+// The friend list decides whether a contact opens a chat or a "send request"
+// prompt, so a failed request is retried and never treated as "no friends".
+async function fetchFriendList() {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await authFetch("/api/friends?type=friends", { credentials: "include" });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data.users)) return data.users;
+      }
+    } catch (e) {
+      console.warn("[app] friends fetch:", e);
+    }
+    if (attempt >= FRIENDS_RETRY_DELAYS_MS.length) return null;
+    await new Promise(resolve => setTimeout(resolve, FRIENDS_RETRY_DELAYS_MS[attempt]));
+  }
+}
+
 async function fetchSocial() {
   if (!me) return;
   try {
-    const [usersRes, friendsRes, incomingRes, outgoingRes] = await Promise.all([
+    const [usersRes, friends, incomingRes, outgoingRes] = await Promise.all([
       authFetch("/api/users", { credentials: "include" }),
-      authFetch("/api/friends?type=friends", { credentials: "include" }),
+      fetchFriendList(),
       authFetch("/api/friends?type=incoming", { credentials: "include" }),
       authFetch("/api/friends?type=outgoing", { credentials: "include" }),
     ]);
 
-    if (!usersRes.ok) throw new Error("users fetch failed");
+    // On failure the previous friend set is kept; the UI shows an error state
+    // only when no friend list has ever loaded.
+    if (friends) {
+      social.friendIds = new Set(friends.map(u => u.userId));
+      social.friendSince = new Map(friends.map(u => [u.userId, u.friendsSince]));
+      social.friendsLoaded = true;
+      social.friendsError = false;
+    } else {
+      social.friendsError = true;
+      console.warn("[app] fetchSocial: friend list unavailable");
+    }
+
+    if (!usersRes.ok) {
+      renderUsers(usersCache);
+      throw new Error("users fetch failed");
+    }
     const { users } = await usersRes.json();
     usersCache = users || [];
-
-    if (friendsRes.ok) {
-      const { users: friends } = await friendsRes.json();
-      social.friendIds = new Set((friends || []).map(u => u.userId));
-      social.friendSince = new Map((friends || []).map(u => [u.userId, u.friendsSince]));
-    }
     if (incomingRes.ok) {
       const { requests } = await incomingRes.json();
       social.incoming = new Map((requests || []).map(r => [r.senderId, r]));
@@ -598,6 +629,7 @@ async function fetchSocial() {
     renderUsers(usersCache);
     renderProfileBadge();
     renderIncomingRequests();
+    if (bubbleUser) renderBubble();
   } catch (e) {
     console.warn("[app] fetchSocial:", e);
   }
@@ -697,6 +729,18 @@ function updateTitle() {
 
 function renderUsers(users) {
   userList.innerHTML = "";
+
+  if (social.friendsError && !social.friendsLoaded) {
+    const notice = document.createElement("button");
+    notice.type = "button";
+    notice.className = "user-list-error";
+    notice.textContent = "Não foi possível carregar seus amigos. Toque para tentar novamente.";
+    notice.addEventListener("click", () => {
+      notice.disabled = true;
+      fetchSocial();
+    });
+    userList.appendChild(notice);
+  }
 
   const filtered = (users || []).filter(u => {
     if (u.userId === me?.userId) return false;
@@ -2799,6 +2843,26 @@ function renderBubble() {
   const incoming = social.incoming.has(bubbleUser.userId);
   const outgoing = social.outgoing.has(bubbleUser.userId);
 
+  if (!isFriend && !social.friendsLoaded) {
+    // Friend list never loaded: we cannot tell friend from stranger, so do not
+    // offer "Enviar solicitação".
+    const note = document.createElement("div");
+    note.className = "user-bubble-error";
+    note.textContent = "Não foi possível carregar seus amigos.";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Tentar novamente";
+    retry.addEventListener("click", async () => {
+      retry.disabled = true;
+      retry.textContent = "Carregando…";
+      await fetchSocial();
+      renderBubble();
+    });
+    userBubbleActions.appendChild(note);
+    userBubbleActions.appendChild(retry);
+    return;
+  }
+
   if (isFriend) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -2846,13 +2910,23 @@ function renderBubble() {
           credentials: "include",
           body: JSON.stringify({ action: "send", targetUserId: bubbleUser.userId }),
         });
-        if (!r.ok) throw new Error("send request failed");
+        if (!r.ok) throw new Error(`send request failed (${r.status})`);
         await fetchSocial();
         await fetchIncomingBadge();
         trackAppActivity("friend_request_send");
         renderBubble();
       } catch (e) {
         console.warn("[app] send request:", e);
+        // e.g. 409 "already friends" when the local friend list was stale.
+        await fetchSocial();
+        if (!bubbleUser) return;
+        renderBubble();
+        if (!social.friendIds.has(bubbleUser.userId) && !social.outgoing.has(bubbleUser.userId)) {
+          const note = document.createElement("div");
+          note.className = "user-bubble-error";
+          note.textContent = "Não foi possível enviar a solicitação.";
+          userBubbleActions.prepend(note);
+        }
       }
     });
     userBubbleActions.appendChild(btn);
