@@ -171,11 +171,13 @@
 
     <div class="room-mod-menu" id="room-mod-menu" role="menu" aria-label="Moderação" hidden></div>
 
-    <div class="user-bubble" id="user-bubble" hidden>
-        <button type="button" class="user-bubble-close" id="user-bubble-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
-        <div class="user-bubble-icon"><i class="bi bi-person-circle"></i></div>
+    <div class="user-bubble" id="user-bubble" role="dialog" aria-labelledby="user-bubble-name" hidden>
+        <button type="button" class="user-bubble-close" id="user-bubble-close" data-str-label="bubbleClose"><i class="bi bi-x" aria-hidden="true"></i></button>
+        <div class="user-bubble-avatar" id="user-bubble-avatar"><i class="bi bi-person-circle"></i></div>
         <div class="user-bubble-name" id="user-bubble-name"></div>
         <div class="user-bubble-handle" id="user-bubble-handle"></div>
+        <div class="user-bubble-created" id="user-bubble-created"></div>
+        <div class="user-bubble-friend" id="user-bubble-friend" hidden><i class="bi bi-people-fill" aria-hidden="true"></i><span id="user-bubble-friend-text"></span></div>
         <div class="user-bubble-actions" id="user-bubble-actions"></div>
     </div>
 
@@ -214,6 +216,25 @@
                         <button type="button" class="account-btn" id="account-showname-cancel" data-str="accountCancel"></button>
                     </form>
                     <div class="account-message" id="account-profile-message" role="status"></div>
+                    <div class="account-name-color" id="account-name-color">
+                        <span class="account-label" id="account-name-color-label" data-str="nameColor"></span>
+                        <p class="account-note" id="account-name-color-locked" data-str="nameColorLocked" hidden></p>
+                        <div id="account-name-color-editor" hidden>
+                            <div class="account-name-color-preview" aria-hidden="true">
+                                <span class="account-name-color-sample" id="account-name-color-sample"></span>
+                            </div>
+                            <div class="account-row account-name-color-row">
+                                <input type="color" class="account-color-picker" id="account-color-picker" data-str-label="nameColorPick" />
+                                <input type="text" class="account-color-hex" id="account-color-hex" maxlength="7" autocomplete="off" autocapitalize="none" spellcheck="false" data-str-label="nameColorHexLabel" />
+                                <button type="button" class="account-btn" id="account-color-save" data-str="accountSave"></button>
+                            </div>
+                            <div class="account-actions">
+                                <button type="button" class="account-btn" id="account-color-reset" data-str="nameColorReset"></button>
+                            </div>
+                            <p class="account-note" data-str="nameColorNote"></p>
+                            <div class="account-message" id="account-color-message" role="status"></div>
+                        </div>
+                    </div>
                     <dl class="account-facts">
                         <div><dt data-str="accountMemberSince"></dt><dd id="account-member-since"></dd></div>
                         <div><dt data-str="accountLastLogin"></dt><dd id="account-last-login"></dd></div>
@@ -470,6 +491,36 @@ const STRINGS = {
   bansNone: "Você não está banido de nenhuma sala.",
   accountSession: "Sessão",
   accountLogout: "Sair da conta",
+
+  // Name color (cosmetic)
+  nameColor: "Cor do nome",
+  nameColorNote: "Aparece na lista de usuários e nas salas.",
+  nameColorDefault: "Padrão",
+  nameColorPick: "Escolher cor",
+  nameColorHexLabel: "Código da cor (hex)",
+  nameColorReset: "Usar a cor padrão",
+  nameColorTooDark: "Cor escura demais: fica ilegível no fundo escuro. Escolha uma mais clara.",
+  nameColorInvalid: "Use o formato #RRGGBB.",
+  nameColorSaved: "Cor salva.",
+  nameColorFailed: "Não foi possível salvar a cor.",
+  nameColorLocked: "Em breve: um item cosmético para desbloquear na loja.",
+
+  // User popup (user list and room avatars)
+  bubbleClose: "Fechar",
+  bubbleCreated: "Conta criada em {date}",
+  bubbleFriends: "Vocês são amigos",
+  bubbleYou: "Este é você",
+  bubbleGoToDms: "Ir para DMs",
+  bubbleOpenAccount: "Minha conta",
+  bubbleSendRequest: "Enviar solicitação de amizade",
+  bubbleRequestSent: "Solicitação enviada",
+  bubbleAccept: "Aceitar solicitação",
+  bubbleDecline: "Recusar",
+  bubbleIncoming: "Quer ser seu amigo",
+  bubbleSendFailed: "Não foi possível enviar a solicitação.",
+  bubbleFriendsFailed: "Não foi possível carregar seus amigos.",
+  bubbleRetry: "Tentar novamente",
+  bubbleLoading: "Carregando…",
 };
 
 const ROOM_POLL_MS = 2000;
@@ -708,6 +759,14 @@ const accountShownameForm = document.getElementById("account-showname-form");
 const accountShownameInput = document.getElementById("account-showname-input");
 const accountShownameCancel = document.getElementById("account-showname-cancel");
 const accountProfileMessage = document.getElementById("account-profile-message");
+const accountNameColorLocked = document.getElementById("account-name-color-locked");
+const accountNameColorEditor = document.getElementById("account-name-color-editor");
+const accountNameColorSample = document.getElementById("account-name-color-sample");
+const accountColorPicker = document.getElementById("account-color-picker");
+const accountColorHex = document.getElementById("account-color-hex");
+const accountColorSave = document.getElementById("account-color-save");
+const accountColorReset = document.getElementById("account-color-reset");
+const accountColorMessage = document.getElementById("account-color-message");
 const accountMemberSince = document.getElementById("account-member-since");
 const accountLastLogin = document.getElementById("account-last-login");
 const accountFriends = document.getElementById("account-friends");
@@ -745,6 +804,10 @@ const userBubbleClose = document.getElementById("user-bubble-close");
 const userBubbleName = document.getElementById("user-bubble-name");
 const userBubbleHandle = document.getElementById("user-bubble-handle");
 const userBubbleActions = document.getElementById("user-bubble-actions");
+const userBubbleAvatar = document.getElementById("user-bubble-avatar");
+const userBubbleCreated = document.getElementById("user-bubble-created");
+const userBubbleFriend = document.getElementById("user-bubble-friend");
+const userBubbleFriendText = document.getElementById("user-bubble-friend-text");
 
 const dmAudio = document.getElementById("dm-audio");
 const profileIcon = document.querySelector(".profile-icon");
@@ -877,7 +940,14 @@ async function initSession() {
       location.href = "index.html";
       return;
     }
-    me = { username: data.username, userId: data.userId, showname: data.showname || null, hasAvatar: data.hasAvatar || false };
+    me = {
+      username: data.username,
+      userId: data.userId,
+      showname: data.showname || null,
+      hasAvatar: data.hasAvatar || false,
+      nameColor: data.nameColor || null,
+      nameColorAllowed: !!data.nameColorAllowed,
+    };
     setMyRoomState(data);
     clientToken = data.token;
     clientTokenExpiry = data.expiresAt ? Date.parse(data.expiresAt) : Date.now() + 14 * 60 * 1000;
@@ -1120,6 +1190,7 @@ function renderUsers(users) {
     const name = document.createElement("span");
     name.className = "username";
     name.textContent = displayName(u);
+    applyNameColor(name, u.nameColor);
 
     row.appendChild(avatarWrap);
     row.appendChild(dot);
@@ -2961,6 +3032,7 @@ function exitShownameEdit() {
 function renderProfileSummary() {
   if (!me) return;
   profileName.textContent = `@${me.username}`;
+  applyNameColor(profileName, me.nameColor);
   shownameInput.value = me.showname || "";
   setAvatarOrFallback(profileIcon, me.userId, me.hasAvatar, "avatar-img");
   setAvatarOrFallback(profileAvatar, me.userId, me.hasAvatar, "avatar-img avatar-img-large");
@@ -3158,115 +3230,177 @@ logoutConfirmOk.addEventListener("click", async () => {
   location.href = "index.html";
 });
 
-// User bubble
+// User bubble: profile popup for a user-list row (non-friends) or a room avatar / name.
+// Shows the large avatar, the name in its color, the account creation date and
+// the friendship state. Friendship is re-checked against the server on open.
+let bubbleSeq = 0;
+let bubbleDetails = null; // null = loading, { failed: true }, or the loaded profile
+
 function openBubble(user) {
   bubbleUser = user;
+  bubbleDetails = null;
+  userBubbleAvatar.dataset.key = "";
   userBubble.hidden = false;
   renderBubble();
+  loadBubbleDetails(user);
 }
 
 function closeBubble() {
+  bubbleSeq++;
   bubbleUser = null;
+  bubbleDetails = null;
   userBubble.hidden = true;
+}
+
+async function loadBubbleDetails(user) {
+  const seq = ++bubbleSeq;
+  const own = user.userId === me?.userId;
+  try {
+    const url = own ? "/api/me" : `/api/contact?targetUserId=${encodeURIComponent(user.userId)}`;
+    const r = await authFetch(url, { credentials: "include" });
+    if (!r.ok) throw new Error(`profile ${r.status}`);
+    const data = await r.json();
+    if (seq !== bubbleSeq) return;
+    const details = {
+      createdAt: own ? data.createdAt : data.accountCreatedAt,
+      friends: !own && !!data.friendsSince,
+      hasAvatar: !!data.hasAvatar,
+      showname: data.showname || null,
+      nameColor: data.nameColor || null,
+    };
+    // The server decides friendship; a stale local list is refreshed so the
+    // sidebar agrees with what the popup shows.
+    if (!own && details.friends !== social.friendIds.has(user.userId)) {
+      await fetchSocial();
+      if (seq !== bubbleSeq) return;
+    }
+    bubbleDetails = details;
+  } catch (e) {
+    console.warn("[app] user profile:", e);
+    if (seq !== bubbleSeq) return;
+    bubbleDetails = { failed: true };
+  }
+  renderBubble();
+}
+
+function bubbleButton(label, onClick, primary = false) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = label;
+  if (primary) btn.classList.add("primary");
+  if (onClick) btn.addEventListener("click", onClick);
+  userBubbleActions.appendChild(btn);
+  return btn;
+}
+
+function setBubbleLine(icon, text) {
+  userBubbleFriend.hidden = !text;
+  if (!text) return;
+  userBubbleFriend.querySelector("i").className = `bi ${icon}`;
+  userBubbleFriendText.textContent = text;
 }
 
 function renderBubble() {
   if (!bubbleUser) return;
-  userBubbleName.textContent = displayName(bubbleUser);
-  userBubbleHandle.textContent = `@${bubbleUser.username}`;
+  const u = bubbleUser;
+  const d = bubbleDetails && !bubbleDetails.failed ? bubbleDetails : null;
+  const own = u.userId === me?.userId;
+
+  const hasAvatar = d ? d.hasAvatar : (own ? !!me.hasAvatar : !!u.hasAvatar);
+  const avatarKey = `${u.userId}:${hasAvatar}:${avatarEpoch}`;
+  if (userBubbleAvatar.dataset.key !== avatarKey) {
+    userBubbleAvatar.dataset.key = avatarKey;
+    setAvatarOrFallback(userBubbleAvatar, u.userId, hasAvatar, "user-bubble-avatar-img");
+  }
+
+  userBubbleName.textContent = displayName(d ? { ...u, showname: d.showname } : (own ? me : u));
+  applyNameColor(userBubbleName, own ? me.nameColor : (d ? d.nameColor : nameColorOf(u.userId, u.nameColor)));
+  userBubbleHandle.textContent = `@${u.username}`;
+  userBubbleCreated.hidden = !!bubbleDetails?.failed;
+  userBubbleCreated.textContent = d
+    ? fillString(STRINGS.bubbleCreated, { date: formatAccountDate(d.createdAt) })
+    : STRINGS.bubbleLoading;
   userBubbleActions.innerHTML = "";
 
-  const isFriend = social.friendIds.has(bubbleUser.userId);
-  const incoming = social.incoming.has(bubbleUser.userId);
-  const outgoing = social.outgoing.has(bubbleUser.userId);
+  if (own) {
+    setBubbleLine("bi-person-fill", STRINGS.bubbleYou);
+    bubbleButton(STRINGS.bubbleOpenAccount, () => openAccount(), true);
+    return;
+  }
 
-  if (!isFriend && !social.friendsLoaded) {
-    // Friend list never loaded: we cannot tell friend from stranger, so do not
-    // offer "Enviar solicitação".
+  const isFriend = social.friendIds.has(u.userId) || !!d?.friends;
+  const incoming = social.incoming.has(u.userId);
+  const outgoing = social.outgoing.has(u.userId);
+
+  if (!isFriend && !bubbleDetails) {
+    // Still asking the server: a stale local list must not offer "Enviar solicitação".
+    setBubbleLine("", "");
+    return;
+  }
+
+  if (!isFriend && !social.friendsLoaded && !d) {
+    // Neither the friend list nor the profile loaded: we cannot tell friend from
+    // stranger, so do not offer "Enviar solicitação".
+    setBubbleLine("", "");
     const note = document.createElement("div");
     note.className = "user-bubble-error";
-    note.textContent = "Não foi possível carregar seus amigos.";
-    const retry = document.createElement("button");
-    retry.type = "button";
-    retry.textContent = "Tentar novamente";
-    retry.addEventListener("click", async () => {
-      retry.disabled = true;
-      retry.textContent = "Carregando…";
-      await fetchSocial();
-      renderBubble();
-    });
+    note.textContent = STRINGS.bubbleFriendsFailed;
     userBubbleActions.appendChild(note);
-    userBubbleActions.appendChild(retry);
+    const retry = bubbleButton(STRINGS.bubbleRetry, async () => {
+      retry.disabled = true;
+      retry.textContent = STRINGS.bubbleLoading;
+      await fetchSocial();
+      if (bubbleUser === u) loadBubbleDetails(u);
+    });
     return;
   }
 
   if (isFriend) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Enviar mensagem";
-    btn.addEventListener("click", () => {
-      const u = bubbleUser;
-      selectUser(u);
-    });
-    userBubbleActions.appendChild(btn);
+    setBubbleLine("bi-people-fill", STRINGS.bubbleFriends);
+    bubbleButton(STRINGS.bubbleGoToDms, () => selectUser(u), true);
   } else if (incoming) {
-    const accept = document.createElement("button");
-    accept.type = "button";
-    accept.textContent = "Aceitar";
-    accept.addEventListener("click", async () => {
-      const u = bubbleUser;
+    setBubbleLine("bi-person-plus-fill", STRINGS.bubbleIncoming);
+    bubbleButton(STRINGS.bubbleAccept, async () => {
       const ok = await answerRequest(u.userId, "accept");
       if (ok) selectUser(u);
-    });
-
-    const decline = document.createElement("button");
-    decline.type = "button";
-    decline.textContent = "Recusar";
-    decline.addEventListener("click", async () => {
-      await answerRequest(bubbleUser.userId, "decline");
+    }, true);
+    bubbleButton(STRINGS.bubbleDecline, async () => {
+      await answerRequest(u.userId, "decline");
       closeBubble();
     });
-
-    userBubbleActions.appendChild(accept);
-    userBubbleActions.appendChild(decline);
   } else if (outgoing) {
-    const label = document.createElement("button");
-    label.type = "button";
-    label.disabled = true;
-    label.textContent = "Solicitação enviada";
-    userBubbleActions.appendChild(label);
+    setBubbleLine("", "");
+    bubbleButton(STRINGS.bubbleRequestSent).disabled = true;
   } else {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Enviar solicitação";
-    btn.addEventListener("click", async () => {
+    setBubbleLine("", "");
+    const btn = bubbleButton(STRINGS.bubbleSendRequest, async () => {
+      btn.disabled = true;
       try {
         const r = await authFetch("/api/friends", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ action: "send", targetUserId: bubbleUser.userId }),
+          body: JSON.stringify({ action: "send", targetUserId: u.userId }),
         });
         if (!r.ok) throw new Error(`send request failed (${r.status})`);
         await fetchSocial();
         await fetchIncomingBadge();
         trackAppActivity("friend_request_send");
-        renderBubble();
+        if (bubbleUser === u) renderBubble();
       } catch (e) {
         console.warn("[app] send request:", e);
         // e.g. 409 "already friends" when the local friend list was stale.
         await fetchSocial();
-        if (!bubbleUser) return;
+        if (bubbleUser !== u) return;
         renderBubble();
-        if (!social.friendIds.has(bubbleUser.userId) && !social.outgoing.has(bubbleUser.userId)) {
+        if (!social.friendIds.has(u.userId) && !social.outgoing.has(u.userId)) {
           const note = document.createElement("div");
           note.className = "user-bubble-error";
-          note.textContent = "Não foi possível enviar a solicitação.";
+          note.textContent = STRINGS.bubbleSendFailed;
           userBubbleActions.prepend(note);
         }
       }
-    });
-    userBubbleActions.appendChild(btn);
+    }, true);
   }
 }
 
@@ -3913,13 +4047,17 @@ function openSenderBubble(m, e) {
   e.stopPropagation(); // keep the document click-outside handler from closing it again
   closeReactionPopovers();
   closeModMenu();
-  if (m.senderId === me.userId) return;
+  if (m.senderId === me.userId) {
+    openBubble(me);
+    return;
+  }
   const cached = usersCache.find(u => u.userId === m.senderId);
   openBubble(cached || {
     userId: m.senderId,
     username: m.senderUsername,
     showname: m.senderShowname || null,
     hasAvatar: !!m.senderHasAvatar,
+    nameColor: m.senderNameColor || null,
   });
 }
 
@@ -3992,6 +4130,7 @@ function renderRoomMessages(options = {}) {
     senderName.type = "button";
     senderName.className = "room-sender-name";
     senderName.textContent = name;
+    applyNameColor(senderName, nameColorOf(m.senderId, m.senderNameColor));
     senderName.addEventListener("click", (e) => openSenderBubble(m, e));
     sender.appendChild(senderName);
     if (m.senderIsMod) {
@@ -4297,12 +4436,163 @@ function renderAccountProfile() {
   if (!me) return;
   setAvatarOrFallback(accountAvatar, me.userId, me.hasAvatar, "");
   accountName.textContent = displayName(me);
+  applyNameColor(accountName, me.nameColor);
   accountHandle.textContent = `@${me.username}`;
   accountAvatarBtn.textContent = me.hasAvatar ? STRINGS.accountAvatarEdit : STRINGS.accountAvatarAdd;
   accountShownameValue.textContent = me.showname || STRINGS.accountUnknown;
   accountShownameValue.classList.toggle("empty", !me.showname);
   accountShownameEdit.textContent = me.showname ? STRINGS.accountEdit : STRINGS.accountAdd;
+  renderAccountNameColor();
 }
+
+// ── Name color (cosmetic) ───────────────────────────────────────────────
+// Same rules as lib/cosmetics.js; the server checks again on save.
+const NAME_COLOR_BACKGROUND = "#2a2a2a"; // lightest row/bubble background a name sits on
+const NAME_COLOR_MIN_CONTRAST = 3;
+const NAME_COLOR_DEFAULT = "#ffffff";    // what the picker shows when no color is set
+
+let accountColorDraft;      // undefined = no edit in progress; null = default; "#rrggbb"
+let accountColorBusy = false;
+let accountColorWarning = false;
+
+function normalizeHexColor(value) {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) return "#" + [...v.slice(1)].map(c => c + c).join("");
+  return null;
+}
+
+function hexLuminance(hex) {
+  const channel = (i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+/** null when usable, else "format" or "contrast". */
+function nameColorProblem(value) {
+  const hex = normalizeHexColor(value);
+  if (!hex) return "format";
+  const [hi, lo] = [hexLuminance(hex), hexLuminance(NAME_COLOR_BACKGROUND)].sort((a, b) => b - a);
+  return (hi + 0.05) / (lo + 0.05) < NAME_COLOR_MIN_CONTRAST ? "contrast" : null;
+}
+
+/** Paints a name; no color (or an invalid one) falls back to the stylesheet color. */
+function applyNameColor(el, color) {
+  el.style.color = normalizeHexColor(color) || "";
+}
+
+/** A user's current color: own from `me`, others from the user list (fresher than old messages). */
+function nameColorOf(userId, fallback) {
+  if (me && userId === me.userId) return me.nameColor || null;
+  const cached = usersCache.find(u => u.userId === userId);
+  return cached ? cached.nameColor || null : fallback || null;
+}
+
+function renderAccountNameColor() {
+  if (!me) return;
+  const allowed = !!me.nameColorAllowed;
+  accountNameColorLocked.hidden = allowed;
+  accountNameColorEditor.hidden = !allowed;
+  if (!allowed) return;
+
+  const saved = me.nameColor || null;
+  const draft = accountColorDraft === undefined ? saved : accountColorDraft;
+  accountNameColorSample.textContent = displayName(me);
+  applyNameColor(accountNameColorSample, draft);
+  const pickerValue = draft || NAME_COLOR_DEFAULT;
+  if (accountColorPicker.value !== pickerValue) accountColorPicker.value = pickerValue;
+  if (document.activeElement !== accountColorHex) accountColorHex.value = draft ? draft.toUpperCase() : "";
+  accountColorHex.placeholder = STRINGS.nameColorDefault;
+
+  const tooDark = !!draft && nameColorProblem(draft) === "contrast";
+  if (tooDark) {
+    setAccountMessage(accountColorMessage, STRINGS.nameColorTooDark);
+    accountColorWarning = true;
+  } else if (accountColorWarning) {
+    setAccountMessage(accountColorMessage, "");
+    accountColorWarning = false;
+  }
+  accountNameColorSample.classList.toggle("too-dark", tooDark);
+  accountColorSave.disabled = accountColorBusy || draft === saved || tooDark;
+  accountColorReset.disabled = accountColorBusy || (!saved && !draft);
+}
+
+function setAccountColorDraft(value) {
+  accountColorDraft = value;
+  renderAccountNameColor();
+}
+
+/** Repaints every name on screen after the own color changed. */
+function refreshNameColors() {
+  applyNameColor(profileName, me.nameColor);
+  applyNameColor(accountName, me.nameColor);
+  if (currentRoom && roomMessages.length) renderRoomMessages({ scroll: "auto" });
+  if (bubbleUser) renderBubble();
+}
+
+async function saveNameColor(color) {
+  if (accountColorBusy) return;
+  accountColorBusy = true;
+  accountColorWarning = false;
+  setAccountMessage(accountColorMessage, "");
+  renderAccountNameColor();
+  try {
+    const r = await authFetch("/api/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "setNameColor", color }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 403) me.nameColorAllowed = false;
+    if (!r.ok) throw new Error(data.error === "Color too dark" ? STRINGS.nameColorTooDark : STRINGS.nameColorFailed);
+    me.nameColor = data.nameColor || null;
+    accountColorDraft = undefined;
+    setAccountMessage(accountColorMessage, STRINGS.nameColorSaved, false, 3000);
+    trackAppActivity("update_profile");
+    refreshNameColors();
+  } catch (e) {
+    console.warn("[app] save name color:", e);
+    setAccountMessage(accountColorMessage, e.message || STRINGS.nameColorFailed);
+  } finally {
+    accountColorBusy = false;
+    renderAccountNameColor();
+  }
+}
+
+accountColorPicker.addEventListener("input", () => setAccountColorDraft(normalizeHexColor(accountColorPicker.value)));
+accountColorHex.addEventListener("input", () => {
+  const raw = accountColorHex.value.trim();
+  const typed = raw && !raw.startsWith("#") ? `#${raw}` : raw;
+  if (!typed) setAccountColorDraft(null);
+  else if (/^#[0-9a-f]{6}$/i.test(typed)) setAccountColorDraft(typed.toLowerCase());
+});
+accountColorHex.addEventListener("change", () => {
+  const raw = accountColorHex.value.trim();
+  const hex = raw ? normalizeHexColor(raw.startsWith("#") ? raw : `#${raw}`) : null;
+  if (raw && !hex) {
+    setAccountMessage(accountColorMessage, STRINGS.nameColorInvalid, true, 3000);
+    accountColorHex.value = "";
+    renderAccountNameColor();
+    return;
+  }
+  setAccountColorDraft(hex);
+  accountColorHex.value = hex ? hex.toUpperCase() : "";
+});
+accountColorHex.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  accountColorHex.blur(); // runs "change"
+  if (!accountColorSave.disabled) accountColorSave.click();
+});
+accountColorSave.addEventListener("click", () => {
+  const draft = accountColorDraft === undefined ? me.nameColor || null : accountColorDraft;
+  saveNameColor(draft);
+});
+accountColorReset.addEventListener("click", () => saveNameColor(null));
 
 function renderAccountDetails() {
   const d = accountData;
@@ -4395,6 +4685,12 @@ async function loadAccount() {
     accountData = data;
     setMyRoomState(data);
     renderRooms();
+    me.nameColorAllowed = !!data.nameColorAllowed;
+    if ((data.nameColor || null) !== (me.nameColor || null)) {
+      me.nameColor = data.nameColor || null;
+      refreshNameColors();
+    }
+    renderAccountNameColor();
     if (data.emailConfigured && data.pendingEmail) {
       accountPendingEmail = data.pendingEmail;
       if (accountEmailMode === "view") accountEmailMode = "code";
@@ -4421,6 +4717,9 @@ function openAccount() {
   accountEmailMode = "view";
   accountShownameForm.hidden = true;
   accountShownameDisplay.hidden = false;
+  accountColorDraft = undefined;
+  accountColorWarning = false;
+  setAccountMessage(accountColorMessage, "");
   setAccountMessage(accountProfileMessage, "");
   setAccountMessage(accountEmailMessage, "");
   accountView.hidden = false;
@@ -4434,6 +4733,7 @@ function closeAccount() {
   if (accountView.hidden) return;
   accountSeq++;
   accountView.hidden = true;
+  accountColorDraft = undefined; // an unsaved color is dropped
   accountRemovePassword.value = "";
   accountEmailPassword.value = "";
   accountStartPassword = "";
