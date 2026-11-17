@@ -2014,3 +2014,286 @@ body {
     min-height: 44px;
   }
 }
+
+/* Public rooms: sidebar group */
+.room-list {
+  flex-shrink: 0;
+  border-bottom: 1px solid #333;
+}
+.room-row .user-row-avatar {
+  color: #aaa;
+}
+.room-row.active .user-row-avatar {
+  color: #fff;
+}
+.room-row:focus-visible {
+  outline: 1px solid #888;
+  outline-offset: -1px;
+}
+.room-row.banned .username {
+  color: #888;
+}
+.room-row-banned {
+  margin-left: auto;
+  color: #ff6666;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* Public rooms: the DM panel in room mode */
+.main {
+  position: relative;
+}
+.dm-panel.room-mode .dm-header {
+  cursor: default;
+}
+.dm-panel.room-mode #dm-status,
+.dm-panel.room-mode .dm-attach-wrap,
+.dm-panel.room-mode .dm-audio-btn {
+  display: none;
+}
+.dm-panel.room-mode .dm-header-avatar {
+  color: #aaa;
+}
+.dm-panel.room-banned .dm-messages {
+  visibility: hidden;
+}
+.dm-input:disabled,
+.dm-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dm-send-btn:disabled:hover {
+  background: #222;
+}
+
+.room-empty {
+  margin: auto;
+  color: #888;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.room-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.room-msg.own {
+  flex-direction: row-reverse;
+}
+/* Leaves room for the avatar and the hover buttons beside the bubble. */
+.room-msg .dm-bubble {
+  align-self: auto;
+  min-width: 0;
+  max-width: calc(100% - 108px);
+}
+.room-msg-avatar {
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.room-msg-avatar img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.room-sender {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 2px;
+  padding-right: 22px;
+}
+.room-sender-name {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.room-msg.own .room-msg-avatar,
+.room-msg.own .room-sender-name {
+  cursor: default;
+}
+@media (hover: hover) {
+  .room-msg.other .room-sender-name:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+}
+.room-mod-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid #4fc3f7;
+  color: #4fc3f7;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+.room-deleted {
+  align-self: center;
+  padding: 2px 0;
+  color: #666;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Mod menu trigger: sits beside the reaction button */
+.room-mod-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.dm-bubble.own .room-mod-btn {
+  right: calc(100% + 34px);
+}
+.dm-bubble.other .room-mod-btn {
+  left: calc(100% + 34px);
+}
+.dm-bubble:hover .room-mod-btn,
+.room-mod-btn:focus-visible {
+  opacity: 1;
+}
+.room-mod-btn:hover {
+  color: #fff;
+}
+/* Keeps the hover alive across the gap between the reaction and mod buttons. */
+.room-mod-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0 -6px;
+}
+@media (pointer: coarse) {
+  .room-mod-btn {
+    opacity: 0.6;
+  }
+}
+
+.room-mod-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.room-mod-menu[hidden] {
+  display: none !important;
+}
+.room-mod-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.room-mod-menu button:hover {
+  background: #222;
+}
+.room-mod-menu button.danger i {
+  color: #ff6666;
+}
+.room-mod-menu-note {
+  padding: 8px 10px;
+  color: #888;
+  font-size: 0.8rem;
+}
+@media (pointer: coarse) {
+  .room-mod-menu button {
+    min-height: 44px;
+  }
+}
+
+/* Room ban popup: inside <main>, over the room view. No way to close it. */
+.room-ban {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: min(320px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 20px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  outline: none;
+}
+.room-ban[hidden] {
+  display: none !important;
+}
+.room-ban-icon {
+  color: #ff4444;
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.room-ban h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.room-ban p {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 576px) {
+  .room-msg .dm-bubble {
+    max-width: calc(100% - 104px);
+  }
+}

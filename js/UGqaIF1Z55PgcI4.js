@@ -3,6 +3,10 @@
   const markup = `
     <div class="app-shell">
         <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header sidebar-header-rooms">
+                <span id="room-list-heading">SALAS</span>
+            </div>
+            <div class="room-list" id="room-list" role="list" aria-labelledby="room-list-heading"></div>
             <div class="sidebar-header">
                 <span>USUÁRIOS</span>
                 <button type="button" id="search-toggle" class="search-toggle" aria-label="Buscar usuários">
@@ -45,7 +49,7 @@
         </aside>
         <main class="main">
             <div class="dm-placeholder" id="dm-placeholder">
-  Selecione um usuário para conversar
+  Selecione um usuário ou uma sala para conversar
   <button type="button" class="dm-menu-btn" id="dm-placeholder-menu-btn" aria-label="Abrir lista de usuários" aria-expanded="false" aria-controls="sidebar">
     <i class="bi bi-list"></i>
   </button>
@@ -88,6 +92,11 @@
                     <button type="button" class="dm-audio-btn" id="dm-audio" aria-label="Áudio"><i class="bi bi-mic"></i></button>
                     <button type="button" class="dm-send-btn" id="dm-send" aria-label="Enviar"><i class="bi bi-send"></i></button>
                 </div>
+            </div>
+            <div class="room-ban" id="room-ban" role="alertdialog" aria-labelledby="room-ban-title" aria-describedby="room-ban-message" tabindex="-1" hidden>
+                <i class="bi bi-slash-circle room-ban-icon" aria-hidden="true"></i>
+                <h3 id="room-ban-title"></h3>
+                <p id="room-ban-message"></p>
             </div>
         </main>
         <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
@@ -159,6 +168,8 @@
 
     <div class="dm-react-bar" id="dm-react-bar" role="menu" aria-label="Reagir" hidden></div>
 
+    <div class="room-mod-menu" id="room-mod-menu" role="menu" aria-label="Moderação" hidden></div>
+
     <div class="user-bubble" id="user-bubble" hidden>
         <button type="button" class="user-bubble-close" id="user-bubble-close" aria-label="Fechar"><i class="bi bi-x"></i></button>
         <div class="user-bubble-icon"><i class="bi bi-person-circle"></i></div>
@@ -176,6 +187,16 @@
         <div class="logout-confirm-actions">
             <button type="button" id="logout-confirm-cancel" class="logout-confirm-cancel">Cancelar</button>
             <button type="button" id="logout-confirm-ok" class="logout-confirm-ok"><i class="bi bi-power"></i> Sair</button>
+        </div>
+    </div>
+
+    <div class="logout-confirm-overlay" id="mod-confirm-overlay" hidden></div>
+    <div class="logout-confirm" id="mod-confirm" role="dialog" aria-modal="true" aria-labelledby="mod-confirm-title" aria-describedby="mod-confirm-message" hidden>
+        <h3 id="mod-confirm-title"></h3>
+        <p id="mod-confirm-message"></p>
+        <div class="logout-confirm-actions">
+            <button type="button" id="mod-confirm-cancel" class="logout-confirm-cancel"></button>
+            <button type="button" id="mod-confirm-ok" class="logout-confirm-ok"></button>
         </div>
     </div>
 
@@ -237,6 +258,66 @@ let recordingIntent = false;
 const MAX_AUDIO_MS = 5 * 60 * 1000;
 
 let avatarEpoch = 0;
+
+// ── Public rooms ────────────────────────────────────────────────────────
+// A room reuses the DM panel (header, reply bar, message list, composer) in
+// "room-mode". `currentRoom` and `selectedUser` are never both set.
+const STRINGS = {
+  bannedTitle: "Acesso bloqueado",
+  bannedAll: "Você foi banido de todas as salas.",
+  bannedOne: "Você foi banido da sala {room}.",
+  bannedMany: "Você foi banido das salas {rooms}.",
+  listAnd: " e ",
+  roomEmpty: "Nenhuma mensagem nesta sala ainda.",
+  roomDeleted: "Mensagem apagada",
+  roomModBadge: "MOD",
+  roomModBadgeLabel: "Moderador",
+  roomBannedRow: "Você foi banido desta sala",
+  roomSendFailed: "Falha ao enviar mensagem.",
+  roomTooLong: "Mensagem muito longa (máx. 2000 caracteres).",
+  roomReactFailed: "Falha ao reagir.",
+  roomViewProfile: "Ver perfil de {name}",
+  modMenuOpen: "Moderação",
+  modLoading: "Carregando…",
+  modDelete: "Apagar mensagem",
+  modBanRoom: "Banir desta sala",
+  modBanAll: "Banir de todas as salas",
+  modUnban: "Remover ban",
+  modBanTitle: "Banir usuário",
+  modBanRoomConfirm: "Banir @{user} da sala {room}?",
+  modBanAllConfirm: "Banir @{user} de todas as salas?",
+  modBanOk: "Banir",
+  modUnbanTitle: "Remover ban",
+  modUnbanConfirm: "Remover todos os bans de @{user}?",
+  modUnbanOk: "Remover ban",
+  modCancel: "Cancelar",
+  modBanned: "@{user} foi banido.",
+  modUnbanned: "O ban de @{user} foi removido.",
+  modFailed: "Não foi possível concluir a ação.",
+  modForbidden: "Você não tem permissão para isso.",
+};
+
+const ROOM_POLL_MS = 2000;
+const ROOM_MAX_LENGTH = 2000;
+const ROOM_ICONS = { GLOBAL: "bi-globe2", POLITICS: "bi-bank", AKSHUALLY: "bi-eyeglasses" };
+const ROOM_ICON_FALLBACK = "bi-hash";
+
+let roomNames = [];                       // from the server (lib/rooms.js ROOMS)
+let myBans = { all: false, rooms: [] };   // the caller's own bans; re-fetched on every room entry
+let myRole = "user";
+let currentRoom = null;
+let roomMessages = [];
+let roomEpoch = 0;
+let roomLastId = null;
+let roomOldestId = null;
+let roomNoMoreOlder = false;
+let roomLoadingOlder = false;
+let roomPollInterval = null;
+let roomPollBusyEpoch = -1;
+let roomBanned = false;
+let roomSending = false;
+let modMenuSeq = 0;
+let modConfirmResolve = null;
 
 let contactPanelOpen = false;
 let currentContact = null;
@@ -423,6 +504,18 @@ const logoutConfirm = document.getElementById("logout-confirm");
 const logoutConfirmCancel = document.getElementById("logout-confirm-cancel");
 const logoutConfirmOk = document.getElementById("logout-confirm-ok");
 
+const roomList = document.getElementById("room-list");
+const roomBan = document.getElementById("room-ban");
+const roomBanTitle = document.getElementById("room-ban-title");
+const roomBanMessage = document.getElementById("room-ban-message");
+const roomModMenu = document.getElementById("room-mod-menu");
+const modConfirmOverlay = document.getElementById("mod-confirm-overlay");
+const modConfirm = document.getElementById("mod-confirm");
+const modConfirmTitle = document.getElementById("mod-confirm-title");
+const modConfirmMessage = document.getElementById("mod-confirm-message");
+const modConfirmCancel = document.getElementById("mod-confirm-cancel");
+const modConfirmOk = document.getElementById("mod-confirm-ok");
+
 const userBubble = document.getElementById("user-bubble");
 const userBubbleClose = document.getElementById("user-bubble-close");
 const userBubbleName = document.getElementById("user-bubble-name");
@@ -561,6 +654,7 @@ async function initSession() {
       return;
     }
     me = { username: data.username, userId: data.userId, showname: data.showname || null, hasAvatar: data.hasAvatar || false };
+    setMyRoomState(data);
     clientToken = data.token;
     clientTokenExpiry = data.expiresAt ? Date.parse(data.expiresAt) : Date.now() + 14 * 60 * 1000;
   } catch (e) {
@@ -871,6 +965,7 @@ async function selectUser(user) {
   closeBubble();
   closeReactBar();
   closeEmojiPicker();
+  leaveRoom();
   for (const el of userList.querySelectorAll(".user-row")) {
     el.classList.remove("active");
   }
@@ -953,6 +1048,7 @@ async function markRead(userId) {
 }
 
 function snippet(replyTo) {
+  if (replyTo.deleted) return STRINGS.roomDeleted;
   if (replyTo.content) {
     return replyTo.content.length > 80
       ? replyTo.content.slice(0, 80) + "…"
@@ -1506,8 +1602,16 @@ function myReaction(message) {
   return (message.reactions || []).find(r => r.userId === me?.userId)?.emoji || null;
 }
 
-function openReactBar(message, anchor, isOwn) {
+// How reactions are sent and whose name a reaction shows. DMs use this one;
+// rooms pass their own (roomReactions).
+const dmReactions = {
+  react: (message, emoji) => reactToMessage(message, emoji),
+  nameOf: (userId) => displayName(selectedUser?.userId === userId ? selectedUser : { username: "?" }),
+};
+
+function openReactBar(message, anchor, isOwn, ctx = dmReactions) {
   closeEmojiPicker();
+  closeModMenu();
   const current = myReaction(message);
   const align = isOwn ? "end" : "start";
   dmReactBar.innerHTML = "";
@@ -1522,7 +1626,7 @@ function openReactBar(message, anchor, isOwn) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       closeReactBar();
-      reactToMessage(message, emoji === current ? null : emoji);
+      ctx.react(message, emoji === current ? null : emoji);
     });
     dmReactBar.appendChild(btn);
   }
@@ -1537,7 +1641,7 @@ function openReactBar(message, anchor, isOwn) {
     e.stopPropagation();
     openEmojiPicker(anchor, "react", (emoji) => {
       closeEmojiPicker();
-      reactToMessage(message, emoji === current ? null : emoji);
+      ctx.react(message, emoji === current ? null : emoji);
     }, align);
   });
   dmReactBar.appendChild(more);
@@ -1590,7 +1694,7 @@ async function reactToMessage(message, emoji) {
 }
 
 /** WhatsApp-style pill hanging off the bubble's bottom edge. */
-function createReactionsPill(message) {
+function createReactionsPill(message, ctx = dmReactions) {
   const reactions = message.reactions || [];
   const pill = document.createElement("button");
   pill.type = "button";
@@ -1613,7 +1717,7 @@ function createReactionsPill(message) {
   const mine = myReaction(message);
   if (mine) pill.classList.add("mine");
   const who = reactions.map(r => {
-    const name = r.userId === me.userId ? "Você" : displayName(selectedUser?.userId === r.userId ? selectedUser : { username: "?" });
+    const name = r.userId === me.userId ? "Você" : ctx.nameOf(r.userId);
     return `${name}: ${r.emoji}`;
   });
   pill.title = mine ? `${who.join("\n")}\nClique para remover sua reação` : who.join("\n");
@@ -1622,10 +1726,10 @@ function createReactionsPill(message) {
   pill.addEventListener("click", (e) => {
     e.stopPropagation();
     if (mine) {
-      reactToMessage(message, null);
+      ctx.react(message, null);
     } else {
       const bubble = pill.closest(".dm-bubble");
-      openReactBar(message, pill, bubble?.classList.contains("own"));
+      openReactBar(message, pill, bubble?.classList.contains("own"), ctx);
     }
   });
   return pill;
@@ -2392,6 +2496,7 @@ function autoResizeInput() {
 }
 
 async function sendMessage() {
+  if (currentRoom) return sendRoomMessage();
   if (!selectedUser) return;
   const content = String(dmInput.value).trim();
   if (!content) return;
@@ -3116,15 +3221,813 @@ async function unfriendContact() {
 
 contactPanelUnfriend.addEventListener("click", unfriendContact);
 
+// ── Public rooms ────────────────────────────────────────────────────────
+function fillString(template, values) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
+}
+
+/** ["A"] → "A", ["A","B"] → "A e B", ["A","B","C"] → "A, B e C". */
+function joinList(items) {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")}${STRINGS.listAnd}${items[items.length - 1]}`;
+}
+
+/** The one place the ban sentence is built, from the server's { all, rooms }. */
+function banMessage({ all, rooms }) {
+  if (all) return STRINGS.bannedAll;
+  if (rooms.length === 1) return fillString(STRINGS.bannedOne, { room: rooms[0] });
+  return fillString(STRINGS.bannedMany, { rooms: joinList(rooms) });
+}
+
+function setMyRoomState(data) {
+  if (data?.bans) {
+    myBans = { all: !!data.bans.all, rooms: Array.isArray(data.bans.rooms) ? data.bans.rooms : [] };
+  }
+  if (typeof data?.role === "string") myRole = data.role;
+  if (Array.isArray(data?.rooms)) roomNames = data.rooms;
+}
+
+function amMod() {
+  return myRole === "mod" || myRole === "owner";
+}
+
+function bannedFromRoom(room) {
+  return myBans.all || myBans.rooms.includes(room);
+}
+
+/** Rooms plus the caller's own bans and role, straight from the server. */
+async function fetchRoomState() {
+  try {
+    const r = await authFetch("/api/rooms?type=list", { credentials: "include" });
+    if (!r.ok) throw new Error(`rooms list ${r.status}`);
+    setMyRoomState(await r.json());
+    renderRooms();
+    return true;
+  } catch (e) {
+    console.warn("[app] fetchRoomState:", e);
+    return false;
+  }
+}
+
+function renderRooms() {
+  roomList.innerHTML = "";
+  for (const name of roomNames) {
+    const row = document.createElement("div");
+    row.className = "user-row room-row";
+    row.dataset.room = name;
+    row.setAttribute("role", "listitem");
+    row.tabIndex = 0;
+    if (name === currentRoom) row.classList.add("active");
+
+    const icon = document.createElement("span");
+    icon.className = "user-row-avatar";
+    const glyph = document.createElement("i");
+    glyph.className = `bi ${ROOM_ICONS[name] || ROOM_ICON_FALLBACK}`;
+    glyph.setAttribute("aria-hidden", "true");
+    icon.appendChild(glyph);
+
+    const label = document.createElement("span");
+    label.className = "username";
+    label.textContent = name;
+
+    row.appendChild(icon);
+    row.appendChild(label);
+
+    if (bannedFromRoom(name)) {
+      row.classList.add("banned");
+      const mark = document.createElement("i");
+      mark.className = "bi bi-slash-circle room-row-banned";
+      mark.title = STRINGS.roomBannedRow;
+      mark.setAttribute("role", "img");
+      mark.setAttribute("aria-label", STRINGS.roomBannedRow);
+      row.appendChild(mark);
+    }
+
+    row.addEventListener("click", () => openRoom(name));
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openRoom(name);
+      }
+    });
+    roomList.appendChild(row);
+  }
+}
+
+function setComposerDisabled(disabled) {
+  dmInput.disabled = disabled;
+  dmSend.disabled = disabled;
+  dmEmojiBtn.disabled = disabled;
+}
+
+function resetRoomMessages() {
+  roomMessages = [];
+  roomLastId = null;
+  roomOldestId = null;
+  roomNoMoreOlder = false;
+  roomLoadingOlder = false;
+}
+
+// Not dismissable by design: no close button, no Escape, no backdrop. It goes
+// away only when the user opens a DM or a room they are not banned from.
+function showBanPopup() {
+  roomBanned = true;
+  stopRoomPoll();
+  resetRoomMessages();
+  dmMessages.innerHTML = "";
+  dmMessages.classList.remove("loading-older");
+  dmTyping.textContent = "";
+  clearReply();
+  closeReactionPopovers();
+  closeModMenu();
+  closeModConfirm(false);
+  dmPanel.classList.add("room-banned");
+  setComposerDisabled(true);
+  roomBanTitle.textContent = STRINGS.bannedTitle;
+  roomBanMessage.textContent = banMessage(myBans);
+  roomBan.hidden = false;
+  roomBan.focus({ preventScroll: true });
+}
+
+function hideBanPopup() {
+  roomBanned = false;
+  roomBan.hidden = true;
+  dmPanel.classList.remove("room-banned");
+  setComposerDisabled(false);
+}
+
+/** Called when leaving a room for a DM. */
+function leaveRoom() {
+  if (!currentRoom && !dmPanel.classList.contains("room-mode")) return;
+  currentRoom = null;
+  roomEpoch++;
+  stopRoomPoll();
+  resetRoomMessages();
+  closeModMenu();
+  closeModConfirm(false);
+  hideBanPopup();
+  clearReply();
+  dmPanel.classList.remove("room-mode");
+  renderRooms();
+}
+
+async function openRoom(name) {
+  trackAppActivity("open_room");
+  closeBubble();
+  closeReactBar();
+  closeEmojiPicker();
+  closeModMenu();
+  if (contactPanelOpen) closeContactPanel();
+  if (audioRecording || recordingIntent) stopAudioRecording(false);
+
+  // Leave the DM (if any): stop its polling and invalidate its pending requests.
+  stopPoll();
+  stopRoomPoll();
+  selectedUser = null;
+  conversationEpoch++;
+  messageList = [];
+  for (const el of userList.querySelectorAll(".user-row.active")) el.classList.remove("active");
+
+  currentRoom = name;
+  const epoch = ++roomEpoch;
+  resetRoomMessages();
+  hideBanPopup();
+  clearReply();
+
+  dmPlaceholder.hidden = true;
+  dmPanel.hidden = false;
+  dmPanel.classList.add("room-mode");
+  dmUsername.textContent = name;
+  delete dmUsername.dataset.userid;
+  dmHeaderAvatar.innerHTML = "";
+  const glyph = document.createElement("i");
+  glyph.className = `bi ${ROOM_ICONS[name] || ROOM_ICON_FALLBACK}`;
+  glyph.setAttribute("aria-hidden", "true");
+  dmHeaderAvatar.appendChild(glyph);
+  dmTyping.textContent = "";
+  dmMessages.innerHTML = "";
+  dmMessages.classList.remove("loading-older");
+  setInitialLoading(true);
+  renderRooms();
+  closeDrawer();
+
+  // Never trust the cached bans: ask the server before showing anything.
+  const fresh = await fetchRoomState();
+  if (epoch !== roomEpoch) return;
+  if (fresh && bannedFromRoom(name)) {
+    showBanPopup();
+    return;
+  }
+
+  // If the state request failed, the messages request still enforces the ban (403).
+  await pollRoom();
+  if (epoch !== roomEpoch || roomBanned) return;
+  startRoomPoll();
+}
+
+/**
+ * Every room request goes through here. A 403 { error: "banned" } updates the
+ * local bans and, if it concerns the open room, shows the ban popup at once.
+ */
+async function roomRequest(url, options = {}) {
+  const r = await authFetch(url, { credentials: "include", ...options });
+  const data = await r.json().catch(() => ({}));
+  const banned = r.status === 403 && data.error === "banned";
+  if (banned) {
+    myBans = { all: !!data.all, rooms: Array.isArray(data.rooms) ? data.rooms : [] };
+    renderRooms();
+    if (currentRoom && bannedFromRoom(currentRoom) && !roomBanned) showBanPopup();
+  }
+  return { r, data, banned };
+}
+
+function roomPost(body) {
+  return roomRequest("/api/rooms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function sortRoomMessages() {
+  roomMessages.sort((a, b) => a.id - b.id);
+}
+
+function markRoomMessageDeleted(id) {
+  const idx = roomMessages.findIndex(m => m.id === id);
+  if (idx === -1 || roomMessages[idx].deleted) return false;
+  roomMessages[idx] = { id, deleted: true, createdAt: roomMessages[idx].createdAt };
+  for (const m of roomMessages) {
+    if (m.replyTo?.id === id) m.replyTo = { id, deleted: true, content: null, senderUsername: null, mediaType: null };
+  }
+  if (replyingTo?.id === id) clearReply();
+  return true;
+}
+
+async function pollRoom() {
+  if (!currentRoom || roomBanned || document.visibilityState !== "visible") return;
+  if (roomPollBusyEpoch === roomEpoch) return;
+
+  const room = currentRoom;
+  const epoch = roomEpoch;
+  roomPollBusyEpoch = epoch;
+
+  try {
+    const initial = roomLastId == null;
+    const url = `/api/rooms?type=messages&room=${encodeURIComponent(room)}`
+      + (initial ? `&limit=${MESSAGE_PAGE_LIMIT}` : `&after=${encodeURIComponent(roomLastId)}`);
+    const { r, data, banned } = await roomRequest(url);
+    if (epoch !== roomEpoch || banned) return;
+    if (!r.ok) throw new Error(`room messages ${r.status}`);
+
+    const fetched = data.messages || [];
+
+    if (initial) {
+      roomMessages = fetched.slice();
+      sortRoomMessages();
+      if (roomMessages.length) {
+        roomOldestId = roomMessages[0].id;
+        roomLastId = roomMessages[roomMessages.length - 1].id;
+      }
+      roomNoMoreOlder = fetched.length < MESSAGE_PAGE_LIMIT;
+      renderRoomMessages({ scroll: "bottom" });
+      return;
+    }
+
+    let changed = false;
+    const known = new Set(roomMessages.map(m => m.id));
+    const fresh = fetched.filter(m => !known.has(m.id));
+    if (fresh.length) {
+      roomMessages = roomMessages.concat(fresh);
+      sortRoomMessages();
+      changed = true;
+    }
+    for (const m of fetched) {
+      if (roomLastId == null || m.id > roomLastId) roomLastId = m.id;
+    }
+
+    // Deletions and reaction changes on messages already on screen.
+    const byId = new Map(roomMessages.map(m => [m.id, m]));
+    for (const state of data.recent || []) {
+      const local = byId.get(state.id);
+      if (!local || local.deleted) continue;
+      if (state.deleted) {
+        if (markRoomMessageDeleted(state.id)) changed = true;
+      } else if (!local.reactionPending && reactionsKey(local) !== JSON.stringify(state.reactions || [])) {
+        local.reactions = state.reactions || [];
+        changed = true;
+      }
+    }
+
+    if (changed) renderRoomMessages({ scroll: "auto" });
+  } catch (e) {
+    console.warn("[app] pollRoom:", e);
+    if (epoch === roomEpoch) setInitialLoading(false);
+  } finally {
+    if (roomPollBusyEpoch === epoch) roomPollBusyEpoch = -1;
+  }
+}
+
+function startRoomPoll() {
+  pollRoom();
+  if (roomPollInterval) return;
+  roomPollInterval = setInterval(pollRoom, ROOM_POLL_MS);
+}
+
+function stopRoomPoll() {
+  if (roomPollInterval) {
+    clearInterval(roomPollInterval);
+    roomPollInterval = null;
+  }
+}
+
+async function loadOlderRoom() {
+  if (!currentRoom || roomBanned || roomNoMoreOlder || roomLoadingOlder) return;
+  if (roomMessages.length === 0 || roomOldestId == null) return;
+
+  const room = currentRoom;
+  const epoch = roomEpoch;
+  roomLoadingOlder = true;
+  showOlderLoader(true);
+
+  try {
+    const { r, data, banned } = await roomRequest(
+      `/api/rooms?type=messages&room=${encodeURIComponent(room)}&before=${encodeURIComponent(roomOldestId)}&limit=${MESSAGE_PAGE_LIMIT}`
+    );
+    if (epoch !== roomEpoch || banned) return;
+    if (!r.ok) throw new Error(`older room messages ${r.status}`);
+
+    const older = data.messages || [];
+    if (older.length === 0) {
+      roomNoMoreOlder = true;
+      return;
+    }
+
+    showOlderLoader(false);
+    const oldScrollHeight = dmMessages.scrollHeight;
+    const oldScrollTop = dmMessages.scrollTop;
+
+    const known = new Set(roomMessages.map(m => m.id));
+    roomMessages = older.filter(m => !known.has(m.id)).concat(roomMessages);
+    sortRoomMessages();
+    roomOldestId = roomMessages[0].id;
+    roomNoMoreOlder = older.length < MESSAGE_PAGE_LIMIT;
+
+    renderRoomMessages({ scroll: "preserve" });
+    dmMessages.scrollTop = oldScrollTop + (dmMessages.scrollHeight - oldScrollHeight);
+  } catch (e) {
+    console.warn("[app] loadOlderRoom:", e);
+  } finally {
+    if (epoch === roomEpoch) {
+      roomLoadingOlder = false;
+      showOlderLoader(false);
+    }
+  }
+}
+
+async function sendRoomMessage() {
+  if (!currentRoom || roomBanned || roomSending) return;
+  const content = String(dmInput.value).trim();
+  if (!content) return;
+  if (content.length > ROOM_MAX_LENGTH) {
+    showImageError(STRINGS.roomTooLong);
+    return;
+  }
+  trackAppActivity("send_message");
+
+  const room = currentRoom;
+  const epoch = roomEpoch;
+  const reply = replyingTo ? { ...replyingTo } : null;
+
+  roomSending = true;
+  dmSend.disabled = true;
+  dmInput.value = "";
+  autoResizeInput();
+
+  try {
+    const { r, data, banned } = await roomPost({ action: "send", room, content, replyToId: reply?.id });
+    if (epoch !== roomEpoch || banned) return;
+    if (!r.ok || !data.message?.id) {
+      // 429 carries a pt-BR message from the server; show it as-is.
+      throw new Error(r.status === 429 && data.error ? data.error : STRINGS.roomSendFailed);
+    }
+
+    // roomLastId is left alone on purpose: the next poll (after=<roomLastId>)
+    // must still return messages others posted just before this one.
+    if (!roomMessages.some(m => m.id === data.message.id)) {
+      roomMessages.push(data.message);
+      sortRoomMessages();
+    }
+    if (roomOldestId == null) roomOldestId = roomMessages[0].id;
+    if (replyingTo?.id === reply?.id) clearReply();
+    renderRoomMessages({ scroll: "bottom" });
+  } catch (e) {
+    console.warn("[app] sendRoomMessage:", e);
+    if (epoch !== roomEpoch) return;
+    if (!dmInput.value) {
+      dmInput.value = content;
+      autoResizeInput();
+    }
+    showImageError(e.message || STRINGS.roomSendFailed);
+  } finally {
+    roomSending = false;
+    if (!roomBanned) dmSend.disabled = false;
+  }
+}
+
+function roomSenderName(m) {
+  return m.senderShowname || m.senderUsername || "?";
+}
+
+const roomReactions = {
+  react: (message, emoji) => reactToRoomMessage(message, emoji),
+  nameOf: (userId) => {
+    const sender = roomMessages.find(m => m.senderId === userId);
+    if (sender) return roomSenderName(sender);
+    const cached = usersCache.find(u => u.userId === userId);
+    return cached ? displayName(cached) : "?";
+  },
+};
+
+async function reactToRoomMessage(message, emoji) {
+  if (!me || !currentRoom || roomBanned || message.deleted) return;
+  const epoch = roomEpoch;
+  const previous = message.reactions || [];
+  const others = previous.filter(r => r.userId !== me.userId);
+  message.reactions = emoji ? [...others, { userId: me.userId, emoji }] : others;
+  message.reactionPending = true;
+  if (emoji) rememberEmoji(emoji);
+  renderRoomMessages({ scroll: "auto" });
+  trackAppActivity("react_message");
+
+  try {
+    const { r, data, banned } = await roomPost(
+      emoji ? { action: "react", messageId: message.id, emoji } : { action: "unreact", messageId: message.id }
+    );
+    if (banned) return;
+    if (!r.ok) throw new Error(r.status === 429 && data.error ? data.error : STRINGS.roomReactFailed);
+    message.reactions = data.reactions || [];
+  } catch (e) {
+    console.warn("[app] room react:", e);
+    message.reactions = previous;
+    if (epoch === roomEpoch) showImageError(e.message || STRINGS.roomReactFailed);
+  } finally {
+    message.reactionPending = false;
+  }
+  if (epoch === roomEpoch && roomMessages.includes(message)) renderRoomMessages({ scroll: "auto" });
+}
+
+function openSenderBubble(m, e) {
+  e.stopPropagation(); // keep the document click-outside handler from closing it again
+  closeReactionPopovers();
+  closeModMenu();
+  if (m.senderId === me.userId) return;
+  const cached = usersCache.find(u => u.userId === m.senderId);
+  openBubble(cached || {
+    userId: m.senderId,
+    username: m.senderUsername,
+    showname: m.senderShowname || null,
+    hasAvatar: !!m.senderHasAvatar,
+  });
+}
+
+function renderRoomMessages(options = {}) {
+  const scrollMode = options.scroll || "bottom";
+  setInitialLoading(false);
+
+  let wasNearBottom = false;
+  let oldScrollTop = 0;
+  if (scrollMode === "auto") {
+    const distanceToBottom = dmMessages.scrollHeight - dmMessages.scrollTop - dmMessages.clientHeight;
+    wasNearBottom = distanceToBottom <= NEAR_BOTTOM_THRESHOLD;
+    oldScrollTop = dmMessages.scrollTop;
+  }
+
+  dmMessages.innerHTML = "";
+
+  if (!roomMessages.length) {
+    const empty = document.createElement("div");
+    empty.className = "room-empty";
+    empty.textContent = STRINGS.roomEmpty;
+    dmMessages.appendChild(empty);
+    return;
+  }
+
+  const mod = amMod();
+  let previousDayKey = null;
+
+  for (const m of roomMessages) {
+    const msgDate = new Date(m.createdAt);
+    const dayKey = `${msgDate.getFullYear()}-${msgDate.getMonth()}-${msgDate.getDate()}`;
+    if (dayKey !== previousDayKey) {
+      const separator = document.createElement("div");
+      separator.className = "dm-day-separator";
+      separator.textContent = formatDayLabel(m.createdAt);
+      dmMessages.appendChild(separator);
+      previousDayKey = dayKey;
+    }
+
+    if (m.deleted) {
+      const gone = document.createElement("div");
+      gone.className = "room-deleted";
+      gone.dataset.id = m.id;
+      gone.textContent = STRINGS.roomDeleted;
+      dmMessages.appendChild(gone);
+      continue;
+    }
+
+    const isOwn = m.senderId === me.userId;
+    const name = roomSenderName(m);
+
+    const row = document.createElement("div");
+    row.className = `room-msg ${isOwn ? "own" : "other"}`;
+
+    const avatar = document.createElement("button");
+    avatar.type = "button";
+    avatar.className = "room-msg-avatar";
+    avatar.setAttribute("aria-label", fillString(STRINGS.roomViewProfile, { name }));
+    setAvatarOrFallback(avatar, m.senderId, m.senderHasAvatar, "");
+    avatar.addEventListener("click", (e) => openSenderBubble(m, e));
+    row.appendChild(avatar);
+
+    const bubble = document.createElement("div");
+    bubble.className = `dm-bubble ${isOwn ? "own" : "other"}`;
+    bubble.dataset.id = m.id;
+
+    const sender = document.createElement("div");
+    sender.className = "room-sender";
+    const senderName = document.createElement("button");
+    senderName.type = "button";
+    senderName.className = "room-sender-name";
+    senderName.textContent = name;
+    senderName.addEventListener("click", (e) => openSenderBubble(m, e));
+    sender.appendChild(senderName);
+    if (m.senderIsMod) {
+      const badge = document.createElement("span");
+      badge.className = "room-mod-badge";
+      badge.textContent = STRINGS.roomModBadge;
+      badge.title = STRINGS.roomModBadgeLabel;
+      sender.appendChild(badge);
+    }
+    bubble.appendChild(sender);
+
+    if (m.replyTo) {
+      const quote = document.createElement("div");
+      quote.className = "dm-quote";
+      quote.dataset.id = m.replyTo.id;
+
+      const quoteName = document.createElement("div");
+      quoteName.className = "dm-quote-name";
+      quoteName.textContent = m.replyTo.senderUsername || "";
+
+      const quoteText = document.createElement("div");
+      quoteText.className = "dm-quote-text";
+      appendLinkifiedText(snippet(m.replyTo), quoteText);
+
+      quote.appendChild(quoteName);
+      quote.appendChild(quoteText);
+      quote.addEventListener("click", (e) => {
+        e.stopPropagation();
+        jumpToMessage(m.replyTo.id);
+      });
+      bubble.appendChild(quote);
+    }
+
+    const text = document.createElement("div");
+    text.className = "dm-bubble-text";
+    appendLinkifiedText(m.content || "", text);
+    bubble.appendChild(text);
+
+    const meta = document.createElement("div");
+    meta.className = "dm-meta";
+    const time = document.createElement("span");
+    time.className = "dm-meta-time";
+    time.textContent = msgDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    meta.appendChild(time);
+    bubble.appendChild(meta);
+
+    const replyBtn = document.createElement("button");
+    replyBtn.type = "button";
+    replyBtn.className = "dm-reply-btn";
+    replyBtn.setAttribute("aria-label", "Responder");
+    replyBtn.innerHTML = '<i class="bi bi-reply"></i>';
+    replyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setReply({ id: m.id, senderId: m.senderId, senderUsername: name, content: m.content, mediaType: null });
+    });
+    bubble.appendChild(replyBtn);
+
+    const reactBtn = document.createElement("button");
+    reactBtn.type = "button";
+    reactBtn.className = "dm-react-btn";
+    reactBtn.setAttribute("aria-label", "Reagir");
+    reactBtn.innerHTML = '<i class="bi bi-emoji-smile"></i>';
+    reactBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openReactBar(m, reactBtn, isOwn, roomReactions);
+    });
+    bubble.appendChild(reactBtn);
+
+    // Shown to mods only; the server checks every action regardless.
+    if (mod) {
+      const modBtn = document.createElement("button");
+      modBtn.type = "button";
+      modBtn.className = "room-mod-btn";
+      modBtn.setAttribute("aria-label", STRINGS.modMenuOpen);
+      modBtn.setAttribute("aria-haspopup", "menu");
+      modBtn.innerHTML = '<i class="bi bi-three-dots-vertical"></i>';
+      modBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openModMenu(m, modBtn, isOwn);
+      });
+      bubble.appendChild(modBtn);
+    }
+
+    if (m.reactions?.length) {
+      bubble.classList.add("has-reactions");
+      bubble.appendChild(createReactionsPill(m, roomReactions));
+    }
+
+    row.appendChild(bubble);
+    dmMessages.appendChild(row);
+  }
+
+  if (scrollMode === "bottom" || (scrollMode === "auto" && wasNearBottom)) {
+    dmMessages.scrollTop = dmMessages.scrollHeight;
+  } else if (scrollMode === "auto") {
+    dmMessages.scrollTop = oldScrollTop;
+  }
+}
+
+// ── Room moderation (mod / owner) ───────────────────────────────────────
+function closeModMenu() {
+  modMenuSeq++;
+  roomModMenu.hidden = true;
+  roomModMenu.innerHTML = "";
+}
+
+function addModMenuItem(label, icon, onClick, danger = false) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("role", "menuitem");
+  if (danger) btn.classList.add("danger");
+  const glyph = document.createElement("i");
+  glyph.className = `bi ${icon}`;
+  glyph.setAttribute("aria-hidden", "true");
+  const text = document.createElement("span");
+  text.textContent = label;
+  btn.append(glyph, text);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeModMenu();
+    onClick();
+  });
+  roomModMenu.appendChild(btn);
+  return btn;
+}
+
+async function openModMenu(message, anchor, isOwn) {
+  closeReactionPopovers();
+  closeModMenu();
+  if (!amMod() || !currentRoom) return;
+
+  const seq = ++modMenuSeq;
+  const room = currentRoom;
+  const align = isOwn ? "end" : "start";
+
+  addModMenuItem(STRINGS.modDelete, "bi-trash", () => deleteRoomMessage(message), true);
+  roomModMenu.hidden = false;
+  positionPopover(roomModMenu, anchor, align);
+  if (isOwn) return;
+
+  // Ban options depend on the sender's current bans, which only mods may read.
+  const loading = document.createElement("div");
+  loading.className = "room-mod-menu-note";
+  loading.textContent = STRINGS.modLoading;
+  roomModMenu.appendChild(loading);
+
+  let info = null;
+  try {
+    const { r, data } = await roomRequest(`/api/rooms?type=bans&targetUserId=${encodeURIComponent(message.senderId)}`);
+    if (r.ok) info = data;
+  } catch (e) {
+    console.warn("[app] mod bans lookup:", e);
+  }
+  if (seq !== modMenuSeq) return;
+  loading.remove();
+
+  if (info?.canModerate) {
+    const username = info.username || message.senderUsername;
+    const bans = info.bans || { all: false, rooms: [] };
+    if (!bans.all && !bans.rooms.includes(room)) {
+      addModMenuItem(STRINGS.modBanRoom, "bi-slash-circle", () => banRoomUser(message.senderId, username, [room]), true);
+    }
+    if (!bans.all) {
+      addModMenuItem(STRINGS.modBanAll, "bi-x-octagon", () => banRoomUser(message.senderId, username, ["ALL"]), true);
+    }
+    if (bans.all || bans.rooms.length) {
+      addModMenuItem(STRINGS.modUnban, "bi-arrow-counterclockwise", () => unbanRoomUser(message.senderId, username));
+    }
+  }
+  positionPopover(roomModMenu, anchor, align);
+}
+
+/** In-app confirmation styled like the logout dialog. Resolves true / false. */
+function confirmModAction({ title, message, okLabel }) {
+  closeModConfirm(false);
+  modConfirmTitle.textContent = title;
+  modConfirmMessage.textContent = message;
+  modConfirmOk.textContent = okLabel;
+  modConfirmCancel.textContent = STRINGS.modCancel;
+  modConfirmOverlay.hidden = false;
+  modConfirm.hidden = false;
+  modConfirmCancel.focus();
+  return new Promise(resolve => { modConfirmResolve = resolve; });
+}
+
+function closeModConfirm(result) {
+  modConfirmOverlay.hidden = true;
+  modConfirm.hidden = true;
+  const resolve = modConfirmResolve;
+  modConfirmResolve = null;
+  resolve?.(result);
+}
+
+modConfirmCancel.addEventListener("click", () => closeModConfirm(false));
+modConfirmOverlay.addEventListener("click", () => closeModConfirm(false));
+modConfirmOk.addEventListener("click", () => closeModConfirm(true));
+
+function modErrorText(r) {
+  return r.status === 403 ? STRINGS.modForbidden : STRINGS.modFailed;
+}
+
+async function deleteRoomMessage(message) {
+  const epoch = roomEpoch;
+  try {
+    const { r, banned } = await roomPost({ action: "delete", messageId: message.id });
+    if (banned || epoch !== roomEpoch) return;
+    if (!r.ok) {
+      showImageError(modErrorText(r));
+      return;
+    }
+    if (markRoomMessageDeleted(message.id)) renderRoomMessages({ scroll: "auto" });
+    trackAppActivity("mod_delete");
+  } catch (e) {
+    console.warn("[app] mod delete:", e);
+    showImageError(STRINGS.modFailed);
+  }
+}
+
+async function banRoomUser(targetUserId, username, rooms) {
+  const all = rooms.includes("ALL");
+  const ok = await confirmModAction({
+    title: STRINGS.modBanTitle,
+    message: all
+      ? fillString(STRINGS.modBanAllConfirm, { user: username })
+      : fillString(STRINGS.modBanRoomConfirm, { user: username, room: rooms[0] }),
+    okLabel: STRINGS.modBanOk,
+  });
+  if (!ok) return;
+  try {
+    const { r, banned } = await roomPost({ action: "ban", targetUserId, rooms });
+    if (banned) return;
+    showImageError(r.ok ? fillString(STRINGS.modBanned, { user: username }) : modErrorText(r));
+    if (r.ok) trackAppActivity("mod_ban");
+  } catch (e) {
+    console.warn("[app] mod ban:", e);
+    showImageError(STRINGS.modFailed);
+  }
+}
+
+async function unbanRoomUser(targetUserId, username) {
+  const ok = await confirmModAction({
+    title: STRINGS.modUnbanTitle,
+    message: fillString(STRINGS.modUnbanConfirm, { user: username }),
+    okLabel: STRINGS.modUnbanOk,
+  });
+  if (!ok) return;
+  try {
+    const { r, banned } = await roomPost({ action: "unban", targetUserId, rooms: ["ALL"] });
+    if (banned) return;
+    showImageError(r.ok ? fillString(STRINGS.modUnbanned, { user: username }) : modErrorText(r));
+    if (r.ok) trackAppActivity("mod_unban");
+  } catch (e) {
+    console.warn("[app] mod unban:", e);
+    showImageError(STRINGS.modFailed);
+  }
+}
+
 // Close the emoji picker / reaction bar when clicking outside them.
 document.addEventListener("click", (e) => {
   if (!dmReactBar.hidden && !dmReactBar.contains(e.target)) closeReactBar();
   if (!emojiPicker.hidden && !emojiPicker.contains(e.target) && !dmEmojiBtn.contains(e.target)) closeEmojiPicker();
+  if (!roomModMenu.hidden && !roomModMenu.contains(e.target)) closeModMenu();
 });
 
 window.addEventListener("resize", () => {
   closeReactBar();
   closeEmojiPicker();
+  closeModMenu();
 });
 
 // Close bubble when clicking outside.
@@ -3144,6 +4047,19 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key !== "Escape") return;
+
+  // The room ban popup (#room-ban) is deliberately absent here: it cannot be dismissed.
+  if (!modConfirm.hidden) {
+    e.preventDefault();
+    closeModConfirm(false);
+    return;
+  }
+
+  if (!roomModMenu.hidden) {
+    e.preventDefault();
+    closeModMenu();
+    return;
+  }
 
   if (!dmReactBar.hidden) {
     e.preventDefault();
@@ -3221,6 +4137,12 @@ dmMessages.addEventListener(
   "scroll",
   () => {
     closeReactionPopovers();
+    closeModMenu();
+    if (currentRoom) {
+      if (roomBanned || roomNoMoreOlder || roomLoadingOlder || roomMessages.length === 0) return;
+      if (dmMessages.scrollTop <= LOAD_OLDER_THRESHOLD) loadOlderRoom();
+      return;
+    }
     if (noMoreOlder || loadingOlder || messageList.length === 0) return;
     if (dmMessages.scrollTop <= LOAD_OLDER_THRESHOLD) {
       loadOlder();
@@ -3258,9 +4180,12 @@ async function maybeSendPresence() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     stopPoll();
+    stopRoomPoll();
   } else if (selectedUser) {
     startPoll();
     fetchSocial(); fetchIncomingBadge();
+  } else if (currentRoom && !roomBanned) {
+    startRoomPoll();
   }
 });
 
@@ -3283,6 +4208,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!me) return;
 
   renderProfileSummary();
+  fetchRoomState();
   await fetchSocial();
   fetchIncomingBadge();
   await fetchUnread();
