@@ -12,6 +12,7 @@ import meHandler from "../lib/handlers/me.js";
 import mediaHandler from "../lib/handlers/media.js";
 import messagesHandler from "../lib/handlers/messages.js";
 import presenceHandler from "../lib/handlers/presence.js";
+import roomsHandler from "../lib/handlers/rooms.js";
 import shellHandler from "../lib/handlers/shell.js";
 import typingHandler from "../lib/handlers/typing.js";
 import unreadHandler from "../lib/handlers/unread.js";
@@ -32,6 +33,7 @@ const handlers = {
   media: mediaHandler,
   messages: messagesHandler,
   presence: presenceHandler,
+  rooms: roomsHandler,
   shell: shellHandler,
   typing: typingHandler,
   unread: unreadHandler,
