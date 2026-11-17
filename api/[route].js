@@ -1,6 +1,7 @@
 import accountHandler from "../lib/handlers/account.js";
 import avatarHandler from "../lib/handlers/avatar.js";
 import contactHandler from "../lib/handlers/contact.js";
+import emailHandler from "../lib/handlers/email.js";
 import fileHandler from "../lib/handlers/file.js";
 import friendsHandler from "../lib/handlers/friends.js";
 import geoHandler from "../lib/handlers/geo.js";
@@ -12,6 +13,7 @@ import meHandler from "../lib/handlers/me.js";
 import mediaHandler from "../lib/handlers/media.js";
 import messagesHandler from "../lib/handlers/messages.js";
 import presenceHandler from "../lib/handlers/presence.js";
+import recoverHandler from "../lib/handlers/recover.js";
 import roomsHandler from "../lib/handlers/rooms.js";
 import shellHandler from "../lib/handlers/shell.js";
 import typingHandler from "../lib/handlers/typing.js";
@@ -22,6 +24,7 @@ const handlers = {
   account: accountHandler,
   avatar: avatarHandler,
   contact: contactHandler,
+  email: emailHandler,
   file: fileHandler,
   friends: friendsHandler,
   geo: geoHandler,
@@ -33,6 +36,7 @@ const handlers = {
   media: mediaHandler,
   messages: messagesHandler,
   presence: presenceHandler,
+  recover: recoverHandler,
   rooms: roomsHandler,
   shell: shellHandler,
   typing: typingHandler,
