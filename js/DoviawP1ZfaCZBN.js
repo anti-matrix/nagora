@@ -33,6 +33,37 @@
                 </div>
 
                 <button type="submit" class="btn btn-light w-100" id="submit-btn">Entrar</button>
+                <button type="button" class="auth-link" id="forgot-link">Esqueci minha senha</button>
+            </form>
+
+            <form id="recover-form" class="hidden-field" novalidate>
+                <div class="mb-3" id="recover-identifier-group">
+                    <label for="recover-identifier" class="form-label">Usuário ou e-mail</label>
+                    <input type="text" class="form-control" id="recover-identifier" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" required/>
+                    <div class="form-text">Enviamos um código para o e-mail verificado da conta</div>
+                </div>
+
+                <div class="hidden-field" id="recover-step2">
+                    <div class="mb-3">
+                        <label for="recover-code" class="form-label">Código</label>
+                        <input type="text" class="form-control" id="recover-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"/>
+                        <div class="form-text">6 dígitos, válido por 10 minutos</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="recover-password" class="form-label">Nova senha</label>
+                        <input type="password" class="form-control" id="recover-password" autocomplete="new-password"/>
+                        <div class="form-text">Mínimo 8 caracteres, com letras e números</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="recover-confirm" class="form-label">Confirmar nova senha</label>
+                        <input type="password" class="form-control" id="recover-confirm" autocomplete="new-password"/>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-light w-100" id="recover-submit">Enviar código</button>
+                <button type="button" class="auth-link" id="recover-back">Voltar para o login</button>
             </form>
 
         </div>
@@ -67,11 +98,26 @@ const confirmPassword = document.getElementById("confirm-password");
 const submitBtn = document.getElementById("submit-btn");
 const message   = document.getElementById("message");
 const authHeading = document.getElementById("auth-heading");
+const forgotLink = document.getElementById("forgot-link");
+const recoverForm = document.getElementById("recover-form");
+const recoverIdentifierGroup = document.getElementById("recover-identifier-group");
+const recoverIdentifier = document.getElementById("recover-identifier");
+const recoverStep2 = document.getElementById("recover-step2");
+const recoverCode = document.getElementById("recover-code");
+const recoverPassword = document.getElementById("recover-password");
+const recoverConfirm = document.getElementById("recover-confirm");
+const recoverSubmit = document.getElementById("recover-submit");
+const recoverBack = document.getElementById("recover-back");
 
 let mode = "login";
+let recoverStep = 1;
+let recoverBusy = false;
 
 function setMode(next) {
   mode = next;
+  form.classList.remove("hidden-field");
+  recoverForm.classList.add("hidden-field");
+  forgotLink.classList.toggle("hidden-field", mode !== "login");
   if (mode === "login") {
     tabLogin.classList.add("active");
     tabSignup.classList.remove("active");
@@ -91,6 +137,131 @@ function setMode(next) {
 
 tabLogin.addEventListener("click", () => setMode("login"));
 tabSignup.addEventListener("click", () => setMode("signup"));
+
+// ── Password recovery: step 1 asks for the account, step 2 for the code and a new password ──
+function showMessage(text, kind) {
+  message.textContent = text;
+  message.className = "mb-3 small" + (kind ? " " + kind : "");
+}
+
+function setRecoverStep(step) {
+  recoverStep = step;
+  recoverIdentifierGroup.classList.toggle("hidden-field", step !== 1);
+  recoverStep2.classList.toggle("hidden-field", step !== 2);
+  recoverSubmit.textContent = step === 1 ? "Enviar código" : "Alterar senha";
+}
+
+function openRecover() {
+  mode = "recover";
+  tabLogin.classList.add("active");
+  tabSignup.classList.remove("active");
+  form.classList.add("hidden-field");
+  recoverForm.classList.remove("hidden-field");
+  authHeading.textContent = "Recuperar senha";
+  recoverIdentifier.value = username.value.trim();
+  recoverCode.value = "";
+  recoverPassword.value = "";
+  recoverConfirm.value = "";
+  setRecoverStep(1);
+  showMessage("");
+  recoverIdentifier.focus();
+}
+
+forgotLink.addEventListener("click", openRecover);
+recoverBack.addEventListener("click", () => setMode("login"));
+
+recoverCode.addEventListener("input", () => {
+  const digits = recoverCode.value.replace(/\D/g, "").slice(0, 6);
+  if (recoverCode.value !== digits) recoverCode.value = digits;
+  if (digits.length === 6) recoverPassword.focus();
+});
+
+async function postRecover(body) {
+  const r = await fetch("/api/recover", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { r, data };
+}
+
+/** 429 and 503 carry a pt-BR sentence from the server. */
+function recoverServerText(r, data, fallback) {
+  return (r.status === 429 || r.status === 503) && data.error ? data.error : fallback;
+}
+
+async function submitRecoverStart() {
+  const identifier = recoverIdentifier.value.trim();
+  if (!identifier) {
+    showMessage("Digite seu usuário ou e-mail.", "text-danger");
+    return;
+  }
+
+  const { r, data } = await postRecover({ action: "start", identifier });
+  if (!r.ok) {
+    showMessage(recoverServerText(r, data, "Não foi possível enviar o código. Tente novamente."), "text-danger");
+    return;
+  }
+  setRecoverStep(2);
+  // The same sentence whether or not the account exists or has an email.
+  showMessage("Se existir uma conta com e-mail verificado, enviamos um código.", "auth-note");
+  recoverCode.focus();
+}
+
+async function submitRecoverConfirm() {
+  const code = recoverCode.value.replace(/\D/g, "");
+  const p = String(recoverPassword.value);
+
+  if (code.length !== 6) {
+    showMessage("Digite o código de 6 dígitos.", "text-danger");
+    return;
+  }
+  if (p.length < 8) {
+    showMessage("A senha deve ter pelo menos 8 caracteres.", "text-danger");
+    return;
+  }
+  if (!HAS_LETTER.test(p) || !HAS_NUMBER.test(p)) {
+    showMessage("A senha deve conter letras e números.", "text-danger");
+    return;
+  }
+  if (p !== String(recoverConfirm.value)) {
+    showMessage("As senhas não coincidem.", "text-danger");
+    return;
+  }
+
+  const identifier = recoverIdentifier.value.trim();
+  const { r, data } = await postRecover({ action: "confirm", identifier, code, newPassword: p });
+  if (!r.ok) {
+    recoverCode.value = "";
+    showMessage(recoverServerText(r, data, "Código inválido ou expirado."), "text-danger");
+    recoverCode.focus();
+    return;
+  }
+
+  setMode("login");
+  username.value = data.username || (identifier.includes("@") ? "" : identifier);
+  password.value = "";
+  showMessage("Senha alterada! Faça login com a nova senha.", "text-success");
+  (username.value ? password : username).focus();
+}
+
+recoverForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (recoverBusy) return;
+  recoverBusy = true;
+  recoverSubmit.disabled = true;
+  try {
+    if (recoverStep === 1) await submitRecoverStart();
+    else await submitRecoverConfirm();
+  } catch {
+    showMessage("Falha na conexão com o servidor.", "text-danger");
+  } finally {
+    recoverBusy = false;
+    recoverSubmit.disabled = false;
+  }
+});
 
 function validate() {
   const u = String(username.value).trim();
