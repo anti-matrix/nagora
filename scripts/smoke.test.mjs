@@ -324,5 +324,16 @@ await ok("templates: pt-BR text + html, code only where expected, no images or l
   }
   for (const m of [taken, changed]) assert.ok(!/\b[0-9]{6}\b/.test(m.text), m.subject);
 });
+await ok("email-changed notice: date and time in Brasília time, no link, no code", () => {
+  const when = new Date("2026-11-17T02:05:00Z"); // 16 November, 23:05 in Brasília
+  assert.equal(mail.formatWhen(when), "16 de novembro de 2026 às 23:05 (horário de Brasília)");
+  const m = mail.emailChangedMessage({ username: "ana", changedAt: when });
+  assert.match(m.subject, /foi alterado/);
+  for (const body of [m.text, m.html]) {
+    assert.ok(body.includes("@ana") && body.includes("16 de novembro de 2026 às 23:05"), body);
+    assert.ok(!/<img|<a |https?:/i.test(body));
+  }
+  assert.ok(!/\b[0-9]{6}\b/.test(m.text));
+});
 
 console.log(`\nAll ${passed} tests passed.`);
