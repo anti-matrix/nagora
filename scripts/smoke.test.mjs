@@ -90,4 +90,99 @@ await ok("tampered client token is rejected", () => {
   assert.equal(verifyClientToken(`${forged}.${sig}`, account), null);
 });
 
+// lib/ratelimit.js builds the Redis client on import; only its pure math is tested here.
+process.env.KV_REST_API_URL ??= "https://redis.invalid";
+process.env.KV_REST_API_TOKEN ??= "smoke-test-token";
+
+const rooms = await import("../lib/rooms.js");
+const rl = await import("../lib/ratelimit.js");
+
+console.log("rooms:");
+await ok("normalizeBans uppercases, dedupes, drops unknown names and sorts", () => {
+  assert.deepEqual(rooms.normalizeBans(["politics", "GLOBAL", "global", "nope", "", null, 7]), ["GLOBAL", "POLITICS"]);
+  assert.deepEqual(rooms.normalizeBans("akshually, all"), ["AKSHUALLY", "ALL"]);
+  assert.deepEqual(rooms.normalizeBans(undefined), []);
+  assert.deepEqual(rooms.normalizeBans({ GLOBAL: true }), []);
+});
+await ok("normalizeBans output only ever contains rooms or ALL", () => {
+  for (const name of rooms.normalizeBans([...rooms.ROOMS, "ALL", "x", "ROOT"])) {
+    assert.ok(name === "ALL" || rooms.ROOMS.includes(name));
+  }
+});
+await ok("isBannedFrom: ALL covers every room, a partial ban only its rooms", () => {
+  for (const room of rooms.ROOMS) assert.equal(rooms.isBannedFrom(["ALL"], room), true);
+  assert.equal(rooms.isBannedFrom(["GLOBAL"], "GLOBAL"), true);
+  assert.equal(rooms.isBannedFrom(["GLOBAL"], "POLITICS"), false);
+  assert.equal(rooms.isBannedFrom(["global"], "GLOBAL"), true);
+  assert.equal(rooms.isBannedFrom([], "GLOBAL"), false);
+  assert.equal(rooms.isBannedFrom(null, "GLOBAL"), false);
+});
+await ok("bannedRooms expands ALL to every room", () => {
+  assert.deepEqual(rooms.bannedRooms(["ALL"]), { all: true, rooms: rooms.ROOMS });
+  assert.deepEqual(rooms.bannedRooms(["POLITICS", "GLOBAL"]), { all: false, rooms: ["GLOBAL", "POLITICS"] });
+  assert.deepEqual(rooms.bannedRooms([]), { all: false, rooms: [] });
+});
+await ok("addBans / removeBans", () => {
+  assert.deepEqual(rooms.addBans(["GLOBAL"], "politics"), ["GLOBAL", "POLITICS"]);
+  assert.deepEqual(rooms.removeBans(["GLOBAL", "POLITICS"], ["GLOBAL"]), ["POLITICS"]);
+  assert.deepEqual(rooms.removeBans(["GLOBAL", "POLITICS"], ["ALL"]), []);
+  assert.deepEqual(rooms.removeBans(["ALL"], ["GLOBAL"]), ["AKSHUALLY", "POLITICS"]);
+  assert.deepEqual(rooms.invalidRooms(["GLOBAL", "all", "LOBBY"]), ["LOBBY"]);
+});
+await ok("normalizeRoom accepts only known rooms", () => {
+  assert.equal(rooms.normalizeRoom("global"), "GLOBAL");
+  assert.equal(rooms.normalizeRoom("ALL"), null);
+  assert.equal(rooms.normalizeRoom("lobby"), null);
+  assert.equal(rooms.normalizeRoom(undefined), null);
+});
+await ok("isMod is true for mod and owner only", () => {
+  assert.equal(rooms.isMod("mod"), true);
+  assert.equal(rooms.isMod("owner"), true);
+  assert.equal(rooms.isMod("user"), false);
+  assert.equal(rooms.isMod(undefined), false);
+});
+await ok("canModerate: owner > mod > user, never an equal or higher role", () => {
+  assert.equal(rooms.canModerate("owner", "user"), true);
+  assert.equal(rooms.canModerate("owner", "mod"), true);
+  assert.equal(rooms.canModerate("owner", "owner"), false);
+  assert.equal(rooms.canModerate("mod", "user"), true);
+  assert.equal(rooms.canModerate("mod", "mod"), false);
+  assert.equal(rooms.canModerate("mod", "owner"), false);
+  assert.equal(rooms.canModerate("user", "user"), false);
+  assert.equal(rooms.canModerate("user", "mod"), false);
+  assert.equal(rooms.canModerate(undefined, "user"), false);
+});
+
+console.log("ratelimit:");
+await ok("windowStart / windowRemainingMs", () => {
+  assert.equal(rl.windowStart(125000, 60000), 120000);
+  assert.equal(rl.windowRemainingMs(125000, 60000), 55000);
+  assert.equal(rl.windowRemainingMs(120000, 60000), 60000);
+  assert.equal(rl.windowRemainingMs(179999, 60000), 1);
+});
+await ok("windowKey is namespaced and changes only when the window rolls over", () => {
+  const a = rl.windowKey("room-post", "U1", 120000, 60000);
+  assert.ok(a.startsWith("ngr:rl:room-post:U1:"), a);
+  assert.equal(a, rl.windowKey("room-post", "U1", 179999, 60000));
+  assert.notEqual(a, rl.windowKey("room-post", "U1", 180000, 60000));
+  assert.notEqual(a, rl.windowKey("room-post", "U2", 120000, 60000));
+});
+await ok("decide allows up to the limit, then reports when to retry", () => {
+  assert.deepEqual(rl.decide(1, 20, 125000, 60000), { allowed: true, remaining: 19, retryAfterSec: 0 });
+  assert.deepEqual(rl.decide(20, 20, 125000, 60000), { allowed: true, remaining: 0, retryAfterSec: 0 });
+  assert.deepEqual(rl.decide(21, 20, 125000, 60000), { allowed: false, remaining: 0, retryAfterSec: 55 });
+  assert.equal(rl.decide(21, 20, 179999, 60000).retryAfterSec, 1);
+});
+await ok("limits match the spec", () => {
+  assert.equal(rl.LIMITS.roomPostCooldown.ms, 1500);
+  assert.deepEqual([rl.LIMITS.roomPostMinute.limit, rl.LIMITS.roomPostMinute.windowMs], [20, 60000]);
+  assert.deepEqual([rl.LIMITS.roomReact.limit, rl.LIMITS.roomReact.windowMs], [30, 60000]);
+  assert.deepEqual([rl.LIMITS.signup.limit, rl.LIMITS.signup.windowMs], [5, 3600000]);
+  assert.deepEqual([rl.LIMITS.loginFail.limit, rl.LIMITS.loginFail.windowMs], [10, 900000]);
+});
+await ok("clientIp takes the first x-forwarded-for hop", () => {
+  assert.equal(rl.clientIp({ headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" } }), "203.0.113.7");
+  assert.equal(rl.clientIp({ headers: {} }), "unknown");
+});
+
 console.log(`\nAll ${passed} tests passed.`);
