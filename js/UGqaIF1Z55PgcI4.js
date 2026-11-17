@@ -43,6 +43,7 @@
                         <div class="profile-requests-heading">Solicitações recebidas</div>
                         <div class="profile-requests-list" id="profile-requests-list"></div>
                     </div>
+                    <button type="button" class="profile-account-btn" id="profile-account-btn" aria-haspopup="dialog" aria-controls="account-view"><i class="bi bi-gear" aria-hidden="true"></i> <span data-str="accountOpen"></span></button>
                     <button type="button" class="profile-logout" id="profile-logout" aria-label="Sair" title="Sair"><i class="bi bi-power"></i></button>
                 </div>
             </div>
@@ -180,6 +181,109 @@
 
     <div class="contact-panel-overlay" id="contact-panel-overlay" hidden></div>
 
+    <div class="account-view" id="account-view" role="dialog" aria-modal="true" aria-labelledby="account-title" hidden>
+        <div class="account-header">
+            <h2 id="account-title" data-str="accountTitle"></h2>
+            <button type="button" class="account-close" id="account-close" data-str-label="accountClose"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="account-scroll" id="account-scroll">
+            <div class="account-content">
+                <div class="account-load-error" id="account-load-error" hidden>
+                    <span data-str="accountLoadFailed"></span>
+                    <button type="button" class="account-btn" id="account-retry" data-str="accountRetry"></button>
+                </div>
+
+                <section class="account-section" aria-labelledby="account-profile-title">
+                    <h3 id="account-profile-title" data-str="accountProfile"></h3>
+                    <div class="account-profile">
+                        <button type="button" class="account-avatar" id="account-avatar" data-str-label="accountAvatarChange"></button>
+                        <div class="account-profile-main">
+                            <div class="account-name" id="account-name"></div>
+                            <div class="account-handle" id="account-handle"></div>
+                            <button type="button" class="account-btn" id="account-avatar-btn"></button>
+                        </div>
+                    </div>
+                    <label class="account-label" for="account-showname-input" data-str="accountShowname"></label>
+                    <div class="account-row" id="account-showname-display">
+                        <span class="account-value" id="account-showname-value"></span>
+                        <button type="button" class="account-btn" id="account-showname-edit"></button>
+                    </div>
+                    <form class="account-row" id="account-showname-form" novalidate hidden>
+                        <input type="text" id="account-showname-input" maxlength="20" autocomplete="off" data-str-placeholder="accountShownamePlaceholder" />
+                        <button type="submit" class="account-btn" data-str="accountSave"></button>
+                        <button type="button" class="account-btn" id="account-showname-cancel" data-str="accountCancel"></button>
+                    </form>
+                    <div class="account-message" id="account-profile-message" role="status"></div>
+                    <dl class="account-facts">
+                        <div><dt data-str="accountMemberSince"></dt><dd id="account-member-since"></dd></div>
+                        <div><dt data-str="accountLastLogin"></dt><dd id="account-last-login"></dd></div>
+                        <div><dt data-str="accountFriends"></dt><dd id="account-friends"></dd></div>
+                    </dl>
+                </section>
+
+                <section class="account-section" aria-labelledby="account-email-title">
+                    <h3 id="account-email-title" data-str="accountEmail"></h3>
+                    <p class="account-note" id="account-email-unavailable" data-str="emailUnavailable" hidden></p>
+                    <div id="account-email-current">
+                        <div class="account-row">
+                            <span class="account-value" id="account-email-value"></span>
+                            <span class="account-badge" id="account-email-badge" data-str="emailVerifiedBadge" hidden></span>
+                        </div>
+                        <p class="account-note" id="account-email-none-note" data-str="emailNoneNote" hidden></p>
+                        <div class="account-actions">
+                            <button type="button" class="account-btn" id="account-email-add"></button>
+                            <button type="button" class="account-btn danger" id="account-email-remove" data-str="emailRemove" hidden></button>
+                        </div>
+                    </div>
+                    <form id="account-email-form" novalidate hidden>
+                        <label class="account-label" for="account-email-input" data-str="emailNewLabel"></label>
+                        <div class="account-row">
+                            <input type="email" id="account-email-input" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" />
+                            <button type="submit" class="account-btn" id="account-email-send" data-str="emailSendCode"></button>
+                            <button type="button" class="account-btn" id="account-email-form-cancel" data-str="accountCancel"></button>
+                        </div>
+                    </form>
+                    <form id="account-code-form" novalidate hidden>
+                        <p class="account-note" id="account-code-sent"></p>
+                        <label class="account-label" for="account-code-input" data-str="emailCodeLabel"></label>
+                        <div class="account-row">
+                            <input type="text" class="account-code-input" id="account-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" />
+                            <button type="submit" class="account-btn" id="account-code-submit" data-str="emailConfirm"></button>
+                        </div>
+                        <div class="account-actions">
+                            <button type="button" class="account-btn" id="account-code-resend"></button>
+                            <button type="button" class="account-btn" id="account-code-other" data-str="emailUseOther"></button>
+                        </div>
+                    </form>
+                    <form id="account-remove-form" novalidate hidden>
+                        <p class="account-note" data-str="emailRemoveNote"></p>
+                        <input type="text" id="account-remove-username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly hidden />
+                        <label class="account-label" for="account-remove-password" data-str="emailPasswordLabel"></label>
+                        <div class="account-row">
+                            <input type="password" id="account-remove-password" autocomplete="current-password" />
+                            <button type="submit" class="account-btn danger" id="account-remove-submit" data-str="emailRemoveConfirm"></button>
+                            <button type="button" class="account-btn" id="account-remove-cancel" data-str="accountCancel"></button>
+                        </div>
+                    </form>
+                    <div class="account-message" id="account-email-message" role="status"></div>
+                </section>
+
+                <section class="account-section" aria-labelledby="account-rooms-title">
+                    <h3 id="account-rooms-title" data-str="accountRooms"></h3>
+                    <dl class="account-facts">
+                        <div><dt data-str="accountRole"></dt><dd id="account-role"></dd></div>
+                    </dl>
+                    <p class="account-note" id="account-bans"></p>
+                </section>
+
+                <section class="account-section" aria-labelledby="account-session-title">
+                    <h3 id="account-session-title" data-str="accountSession"></h3>
+                    <button type="button" class="account-btn danger" id="account-logout"><i class="bi bi-power" aria-hidden="true"></i> <span data-str="accountLogout"></span></button>
+                </section>
+            </div>
+        </div>
+    </div>
+
     <div class="logout-confirm-overlay" id="logout-confirm-overlay" hidden></div>
     <div class="logout-confirm" id="logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title" hidden>
         <h3 id="logout-confirm-title">Sair</h3>
@@ -295,6 +399,66 @@ const STRINGS = {
   modUnbanned: "O ban de @{user} foi removido.",
   modFailed: "Não foi possível concluir a ação.",
   modForbidden: "Você não tem permissão para isso.",
+
+  // Account dashboard ("Minha conta")
+  accountOpen: "Minha conta",
+  accountTitle: "Minha conta",
+  accountClose: "Fechar",
+  accountLoading: "Carregando…",
+  accountLoadFailed: "Não foi possível carregar os dados da conta.",
+  accountRetry: "Tentar novamente",
+  accountUnknown: "—",
+  accountProfile: "Perfil",
+  accountAvatarChange: "Alterar foto de perfil",
+  accountAvatarAdd: "Adicionar foto",
+  accountAvatarEdit: "Alterar foto",
+  accountShowname: "Nome de exibição",
+  accountShownamePlaceholder: "Como quer ser chamado?",
+  accountAdd: "Adicionar",
+  accountEdit: "Editar",
+  accountSave: "Salvar",
+  accountCancel: "Cancelar",
+  accountSaved: "Salvo",
+  accountSaveFailed: "Erro ao salvar",
+  accountMemberSince: "Membro desde",
+  accountLastLogin: "Último login",
+  accountDateTime: "{date} às {time}",
+  accountFriends: "Amigos",
+  accountEmail: "E-mail",
+  emailNone: "Nenhum e-mail verificado",
+  emailNoneNote: "Adicione um e-mail para poder recuperar sua senha se esquecer.",
+  emailVerifiedBadge: "Verificado",
+  emailAdd: "Adicionar e-mail",
+  emailChange: "Alterar e-mail",
+  emailRemove: "Remover e-mail",
+  emailUnavailable: "O e-mail não está disponível no momento. O resto da sua conta funciona normalmente.",
+  emailNewLabel: "Novo e-mail",
+  emailSendCode: "Enviar código",
+  emailInvalid: "Digite um e-mail válido.",
+  emailSame: "Este já é o seu e-mail verificado.",
+  emailCodeSent: "Enviamos uma mensagem para {email}. Digite o código de 6 dígitos que está nela. Ele vale por 10 minutos.",
+  emailCodeLabel: "Código de verificação",
+  emailConfirm: "Confirmar",
+  emailResend: "Reenviar código",
+  emailResendIn: "Reenviar código ({seconds}s)",
+  emailResent: "Enviamos uma nova mensagem.",
+  emailUseOther: "Usar outro e-mail",
+  emailCodeInvalid: "Código inválido ou expirado.",
+  emailVerified: "E-mail verificado.",
+  emailRemoveNote: "Sem um e-mail verificado você não poderá recuperar sua senha. Digite sua senha atual para remover.",
+  emailPasswordLabel: "Senha atual",
+  emailRemoveConfirm: "Remover",
+  emailPasswordWrong: "Senha incorreta.",
+  emailRemoved: "E-mail removido.",
+  emailFailed: "Não foi possível concluir. Tente novamente.",
+  accountRooms: "Salas",
+  accountRole: "Função",
+  roleUser: "Usuário",
+  roleMod: "Moderador",
+  roleOwner: "Dono",
+  bansNone: "Você não está banido de nenhuma sala.",
+  accountSession: "Sessão",
+  accountLogout: "Sair da conta",
 };
 
 const ROOM_POLL_MS = 2000;
@@ -515,6 +679,53 @@ const modConfirmTitle = document.getElementById("mod-confirm-title");
 const modConfirmMessage = document.getElementById("mod-confirm-message");
 const modConfirmCancel = document.getElementById("mod-confirm-cancel");
 const modConfirmOk = document.getElementById("mod-confirm-ok");
+
+const profileAccountBtn = document.getElementById("profile-account-btn");
+const accountView = document.getElementById("account-view");
+const accountScroll = document.getElementById("account-scroll");
+const accountClose = document.getElementById("account-close");
+const accountLoadError = document.getElementById("account-load-error");
+const accountRetry = document.getElementById("account-retry");
+const accountAvatar = document.getElementById("account-avatar");
+const accountAvatarBtn = document.getElementById("account-avatar-btn");
+const accountName = document.getElementById("account-name");
+const accountHandle = document.getElementById("account-handle");
+const accountShownameDisplay = document.getElementById("account-showname-display");
+const accountShownameValue = document.getElementById("account-showname-value");
+const accountShownameEdit = document.getElementById("account-showname-edit");
+const accountShownameForm = document.getElementById("account-showname-form");
+const accountShownameInput = document.getElementById("account-showname-input");
+const accountShownameCancel = document.getElementById("account-showname-cancel");
+const accountProfileMessage = document.getElementById("account-profile-message");
+const accountMemberSince = document.getElementById("account-member-since");
+const accountLastLogin = document.getElementById("account-last-login");
+const accountFriends = document.getElementById("account-friends");
+const accountEmailUnavailable = document.getElementById("account-email-unavailable");
+const accountEmailCurrent = document.getElementById("account-email-current");
+const accountEmailValue = document.getElementById("account-email-value");
+const accountEmailBadge = document.getElementById("account-email-badge");
+const accountEmailNoneNote = document.getElementById("account-email-none-note");
+const accountEmailAdd = document.getElementById("account-email-add");
+const accountEmailRemove = document.getElementById("account-email-remove");
+const accountEmailForm = document.getElementById("account-email-form");
+const accountEmailInput = document.getElementById("account-email-input");
+const accountEmailSend = document.getElementById("account-email-send");
+const accountEmailFormCancel = document.getElementById("account-email-form-cancel");
+const accountCodeForm = document.getElementById("account-code-form");
+const accountCodeSent = document.getElementById("account-code-sent");
+const accountCodeInput = document.getElementById("account-code-input");
+const accountCodeSubmit = document.getElementById("account-code-submit");
+const accountCodeResend = document.getElementById("account-code-resend");
+const accountCodeOther = document.getElementById("account-code-other");
+const accountRemoveForm = document.getElementById("account-remove-form");
+const accountRemoveUsername = document.getElementById("account-remove-username");
+const accountRemovePassword = document.getElementById("account-remove-password");
+const accountRemoveSubmit = document.getElementById("account-remove-submit");
+const accountRemoveCancel = document.getElementById("account-remove-cancel");
+const accountEmailMessage = document.getElementById("account-email-message");
+const accountRole = document.getElementById("account-role");
+const accountBans = document.getElementById("account-bans");
+const accountLogout = document.getElementById("account-logout");
 
 const userBubble = document.getElementById("user-bubble");
 const userBubbleClose = document.getElementById("user-bubble-close");
@@ -2754,6 +2965,7 @@ function renderProfileSummary() {
   }
 
   exitShownameEdit();
+  renderAccountProfile();
 }
 
 function toggleProfile() {
@@ -2815,6 +3027,8 @@ function renderIncomingRequests() {
 function showProfileMessage(text, isError = true) {
   profileMessage.textContent = text;
   profileMessage.className = isError ? "profile-message error" : "profile-message success";
+  // The avatar and display-name flows are shared with the account dashboard.
+  if (!accountView.hidden) setAccountMessage(accountProfileMessage, text, isError, 3000);
   setTimeout(() => {
     if (profileMessage.textContent === text) {
       profileMessage.textContent = "";
@@ -2873,8 +3087,9 @@ profileAvatarInput.addEventListener("change", async () => {
   }
 });
 
-shownameSave.addEventListener("click", async () => {
-  const value = String(shownameInput.value).trim();
+/** Saves the display name (sidebar profile and account dashboard). Resolves true on success. */
+async function saveShowname(rawValue) {
+  const value = String(rawValue).trim();
   try {
     const r = await authFetch("/api/me", {
       method: "POST",
@@ -2885,18 +3100,22 @@ shownameSave.addEventListener("click", async () => {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       showProfileMessage(data.error || "Erro ao salvar");
-      return;
+      return false;
     }
     me.showname = data.showname || null;
     renderProfileSummary();
     showProfileMessage("Salvo", false);
     trackAppActivity("update_profile");
     exitShownameEdit();
+    return true;
   } catch (e) {
     console.warn("[app] save showname:", e);
     showProfileMessage("Erro ao salvar");
+    return false;
   }
-});
+}
+
+shownameSave.addEventListener("click", () => saveShowname(shownameInput.value));
 
 function openLogoutConfirm() {
   logoutConfirmOverlay.hidden = false;
@@ -4017,6 +4236,381 @@ async function unbanRoomUser(targetUserId, username) {
   }
 }
 
+// ── Account dashboard ("Minha conta") ───────────────────────────────────
+// A full view over the app shell. The profile block reuses the sidebar flows
+// (avatar picker, saveShowname); the email block talks to /api/email. The
+// server never says whether an address belongs to someone else, so neither
+// does anything here.
+const ACCOUNT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ROLE_LABELS = { user: "roleUser", mod: "roleMod", owner: "roleOwner" };
+
+let accountData = null;        // last GET /api/me
+let accountSeq = 0;            // bumped on open / close: stale async results are dropped
+let accountEmailMode = "view"; // "view" | "form" | "code" | "remove"
+let accountPendingEmail = null;
+let accountResendAt = 0;
+let accountResendTimer = null;
+let accountBusy = false;
+const accountMessageTimers = new WeakMap();
+
+/** Fills the static texts of injected markup from STRINGS (data-str, data-str-label, data-str-placeholder). */
+function applyStrings(root) {
+  for (const el of root.querySelectorAll("[data-str]")) el.textContent = STRINGS[el.dataset.str] ?? "";
+  for (const el of root.querySelectorAll("[data-str-label]")) el.setAttribute("aria-label", STRINGS[el.dataset.strLabel] ?? "");
+  for (const el of root.querySelectorAll("[data-str-placeholder]")) el.placeholder = STRINGS[el.dataset.strPlaceholder] ?? "";
+}
+
+function setAccountMessage(el, text, isError = true, clearAfterMs = 0) {
+  clearTimeout(accountMessageTimers.get(el));
+  el.textContent = text || "";
+  el.className = `account-message${text ? (isError ? " error" : " success") : ""}`;
+  if (text && clearAfterMs) {
+    accountMessageTimers.set(el, setTimeout(() => setAccountMessage(el, ""), clearAfterMs));
+  }
+}
+
+function formatAccountDate(iso, withTime = false) {
+  if (!iso) return STRINGS.accountUnknown;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return STRINGS.accountUnknown;
+  const date = d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  if (!withTime) return date;
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return fillString(STRINGS.accountDateTime, { date, time });
+}
+
+function renderAccountProfile() {
+  if (!me) return;
+  setAvatarOrFallback(accountAvatar, me.userId, me.hasAvatar, "");
+  accountName.textContent = displayName(me);
+  accountHandle.textContent = `@${me.username}`;
+  accountAvatarBtn.textContent = me.hasAvatar ? STRINGS.accountAvatarEdit : STRINGS.accountAvatarAdd;
+  accountShownameValue.textContent = me.showname || STRINGS.accountUnknown;
+  accountShownameValue.classList.toggle("empty", !me.showname);
+  accountShownameEdit.textContent = me.showname ? STRINGS.accountEdit : STRINGS.accountAdd;
+}
+
+function renderAccountDetails() {
+  const d = accountData;
+  const waiting = accountLoadError.hidden ? STRINGS.accountLoading : STRINGS.accountUnknown;
+  accountMemberSince.textContent = d ? formatAccountDate(d.createdAt) : waiting;
+  accountLastLogin.textContent = d ? formatAccountDate(d.lastLoginAt, true) : waiting;
+  accountFriends.textContent = d ? String(d.friendsCount ?? 0) : waiting;
+
+  // Role and bans come from the handshake first, then from /api/me.
+  accountRole.textContent = STRINGS[ROLE_LABELS[myRole] || "roleUser"];
+  const banned = myBans.all || myBans.rooms.length > 0;
+  accountBans.textContent = banned ? banMessage(myBans) : STRINGS.bansNone;
+  accountBans.classList.toggle("warn", banned);
+
+  renderAccountEmail();
+}
+
+function renderAccountEmail() {
+  const d = accountData;
+  const available = !!d?.emailConfigured;
+  const mode = available ? accountEmailMode : "view";
+  const email = d?.email || null;
+
+  accountEmailUnavailable.hidden = !d || available;
+  accountEmailCurrent.hidden = !!d && !available && !email;
+  accountEmailValue.textContent = !d ? STRINGS.accountLoading : (email || STRINGS.emailNone);
+  accountEmailValue.classList.toggle("empty", !email);
+  accountEmailBadge.hidden = !email;
+  accountEmailNoneNote.hidden = !available || !!email || mode !== "view";
+
+  const showActions = available && mode === "view";
+  accountEmailAdd.hidden = !showActions;
+  accountEmailAdd.textContent = email ? STRINGS.emailChange : STRINGS.emailAdd;
+  accountEmailRemove.hidden = !showActions || !email;
+
+  accountEmailForm.hidden = mode !== "form";
+  accountCodeForm.hidden = mode !== "code";
+  accountRemoveForm.hidden = mode !== "remove";
+
+  if (mode === "code") {
+    accountCodeSent.textContent = fillString(STRINGS.emailCodeSent, { email: accountPendingEmail || "" });
+    tickAccountResend();
+  }
+  accountEmailSend.disabled = accountBusy;
+  accountCodeSubmit.disabled = accountBusy;
+  accountRemoveSubmit.disabled = accountBusy;
+}
+
+function setAccountEmailMode(mode, { keepMessage = false } = {}) {
+  accountEmailMode = mode;
+  if (!keepMessage) setAccountMessage(accountEmailMessage, "");
+  accountRemovePassword.value = "";
+  renderAccountEmail();
+  if (mode === "form") accountEmailInput.focus();
+  else if (mode === "code") accountCodeInput.focus();
+  else if (mode === "remove") accountRemovePassword.focus();
+}
+
+function tickAccountResend() {
+  const left = Math.ceil((accountResendAt - Date.now()) / 1000);
+  if (left > 0) {
+    accountCodeResend.disabled = true;
+    accountCodeResend.textContent = fillString(STRINGS.emailResendIn, { seconds: left });
+    if (!accountResendTimer && !accountView.hidden) accountResendTimer = setInterval(tickAccountResend, 500);
+    return;
+  }
+  accountCodeResend.disabled = accountBusy;
+  accountCodeResend.textContent = STRINGS.emailResend;
+  clearInterval(accountResendTimer);
+  accountResendTimer = null;
+}
+
+function startAccountResendCooldown(seconds) {
+  accountResendAt = Date.now() + Math.max(1, Number(seconds) || 60) * 1000;
+  tickAccountResend();
+}
+
+async function loadAccount() {
+  const seq = ++accountSeq;
+  accountLoadError.hidden = true;
+  renderAccountDetails();
+  try {
+    const r = await authFetch("/api/me", { credentials: "include" });
+    if (!r.ok) throw new Error(`me ${r.status}`);
+    const data = await r.json();
+    if (seq !== accountSeq || accountView.hidden) return;
+
+    accountData = data;
+    setMyRoomState(data);
+    renderRooms();
+    if (data.emailConfigured && data.pendingEmail) {
+      accountPendingEmail = data.pendingEmail;
+      if (accountEmailMode === "view") accountEmailMode = "code";
+    } else if (accountEmailMode === "code") {
+      accountEmailMode = "view";
+    }
+    renderAccountDetails();
+  } catch (e) {
+    console.warn("[app] loadAccount:", e);
+    if (seq !== accountSeq) return;
+    accountLoadError.hidden = false;
+    renderAccountDetails();
+  }
+}
+
+function openAccount() {
+  if (!me) return;
+  trackAppActivity("open_account");
+  closeBubble();
+  closeReactionPopovers();
+  closeEmojiPicker();
+  closeModMenu();
+
+  accountEmailMode = "view";
+  accountShownameForm.hidden = true;
+  accountShownameDisplay.hidden = false;
+  setAccountMessage(accountProfileMessage, "");
+  setAccountMessage(accountEmailMessage, "");
+  accountView.hidden = false;
+  accountScroll.scrollTop = 0;
+  renderAccountProfile();
+  accountClose.focus();
+  loadAccount();
+}
+
+function closeAccount() {
+  if (accountView.hidden) return;
+  accountSeq++;
+  accountView.hidden = true;
+  accountRemovePassword.value = "";
+  accountCodeInput.value = "";
+  clearInterval(accountResendTimer);
+  accountResendTimer = null;
+  profileAccountBtn.focus();
+}
+
+async function emailRequest(body) {
+  const r = await authFetch("/api/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  // The server lost its email configuration: switch to the unavailable state.
+  if (r.status === 503 && accountData) accountData.emailConfigured = false;
+  return { r, data };
+}
+
+/** 429 / 502 / 503 carry a pt-BR sentence from the server; everything else gets a local one. */
+function emailErrorText(r, data, fallback) {
+  return [429, 502, 503].includes(r.status) && data.error ? data.error : fallback;
+}
+
+/** Runs one email action at a time; `fn` returns the message to show, if any. */
+async function runEmailAction(fn) {
+  if (accountBusy) return;
+  accountBusy = true;
+  renderAccountEmail();
+  const seq = accountSeq;
+  let failure = null;
+  try {
+    failure = await fn(() => seq !== accountSeq);
+  } catch (e) {
+    console.warn("[app] email action:", e);
+    failure = STRINGS.emailFailed;
+  } finally {
+    accountBusy = false;
+  }
+  if (seq !== accountSeq) return;
+  if (failure) setAccountMessage(accountEmailMessage, failure);
+  renderAccountEmail();
+}
+
+function sendEmailCode(rawEmail, { resend = false } = {}) {
+  const email = String(rawEmail ?? "").trim().toLowerCase();
+  if (!ACCOUNT_EMAIL_RE.test(email) || email.length > 254) {
+    setAccountMessage(accountEmailMessage, STRINGS.emailInvalid);
+    return;
+  }
+  if (accountData?.email === email) {
+    setAccountMessage(accountEmailMessage, STRINGS.emailSame);
+    return;
+  }
+
+  return runEmailAction(async (stale) => {
+    const { r, data } = await emailRequest({ action: "start", email });
+    if (stale()) return null;
+    if (r.status === 429 && data.retryAfterSec) startAccountResendCooldown(data.retryAfterSec);
+    if (r.status === 400) return STRINGS.emailInvalid;
+    if (r.status === 409) return STRINGS.emailSame;
+    if (!r.ok) return emailErrorText(r, data, STRINGS.emailFailed);
+
+    accountPendingEmail = data.pendingEmail || email;
+    accountCodeInput.value = "";
+    accountEmailInput.value = "";
+    startAccountResendCooldown(data.cooldownSec);
+    setAccountEmailMode("code");
+    if (resend) setAccountMessage(accountEmailMessage, STRINGS.emailResent, false, 4000);
+    trackAppActivity("email_start");
+    return null;
+  });
+}
+
+function confirmEmailCode() {
+  const code = accountCodeInput.value.replace(/\D/g, "");
+  if (code.length !== 6) {
+    setAccountMessage(accountEmailMessage, STRINGS.emailCodeInvalid);
+    return;
+  }
+
+  return runEmailAction(async (stale) => {
+    const { r, data } = await emailRequest({ action: "confirm", code });
+    if (stale()) return null;
+    if (!r.ok) {
+      accountCodeInput.value = "";
+      accountCodeInput.focus();
+      return r.status === 400 ? STRINGS.emailCodeInvalid : emailErrorText(r, data, STRINGS.emailFailed);
+    }
+
+    if (accountData) {
+      accountData.email = data.email;
+      accountData.emailVerified = true;
+      accountData.pendingEmail = null;
+    }
+    accountPendingEmail = null;
+    accountCodeInput.value = "";
+    setAccountEmailMode("view");
+    setAccountMessage(accountEmailMessage, STRINGS.emailVerified, false);
+    trackAppActivity("email_confirm");
+    return null;
+  });
+}
+
+function removeAccountEmail() {
+  const password = accountRemovePassword.value;
+  if (!password) {
+    setAccountMessage(accountEmailMessage, STRINGS.emailPasswordWrong);
+    accountRemovePassword.focus();
+    return;
+  }
+
+  return runEmailAction(async (stale) => {
+    const { r, data } = await emailRequest({ action: "remove", password });
+    if (stale()) return null;
+    if (!r.ok) {
+      accountRemovePassword.value = "";
+      return r.status === 403 ? STRINGS.emailPasswordWrong : emailErrorText(r, data, STRINGS.emailFailed);
+    }
+
+    if (accountData) {
+      accountData.email = null;
+      accountData.emailVerified = false;
+    }
+    setAccountEmailMode("view");
+    setAccountMessage(accountEmailMessage, STRINGS.emailRemoved, false);
+    trackAppActivity("email_remove");
+    return null;
+  });
+}
+
+profileAccountBtn.addEventListener("click", openAccount);
+accountClose.addEventListener("click", closeAccount);
+accountRetry.addEventListener("click", loadAccount);
+accountAvatar.addEventListener("click", openAvatarPicker);
+accountAvatarBtn.addEventListener("click", openAvatarPicker);
+accountLogout.addEventListener("click", openLogoutConfirm);
+
+accountShownameEdit.addEventListener("click", () => {
+  accountShownameInput.value = me?.showname || "";
+  accountShownameDisplay.hidden = true;
+  accountShownameForm.hidden = false;
+  accountShownameInput.focus();
+});
+
+function closeAccountShownameForm() {
+  accountShownameForm.hidden = true;
+  accountShownameDisplay.hidden = false;
+}
+
+accountShownameCancel.addEventListener("click", closeAccountShownameForm);
+accountShownameForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (await saveShowname(accountShownameInput.value)) closeAccountShownameForm();
+});
+
+accountEmailAdd.addEventListener("click", () => {
+  accountEmailInput.value = "";
+  setAccountEmailMode("form");
+});
+accountEmailRemove.addEventListener("click", () => {
+  accountRemoveUsername.value = me?.username || "";
+  setAccountEmailMode("remove");
+});
+accountEmailFormCancel.addEventListener("click", () => setAccountEmailMode("view"));
+accountRemoveCancel.addEventListener("click", () => setAccountEmailMode("view"));
+accountCodeOther.addEventListener("click", () => {
+  accountEmailInput.value = accountPendingEmail || "";
+  setAccountEmailMode("form");
+});
+accountCodeResend.addEventListener("click", () => sendEmailCode(accountPendingEmail, { resend: true }));
+
+accountEmailForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendEmailCode(accountEmailInput.value);
+});
+accountCodeForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  confirmEmailCode();
+});
+accountRemoveForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  removeAccountEmail();
+});
+
+// Digits only; the sixth digit submits.
+accountCodeInput.addEventListener("input", () => {
+  const digits = accountCodeInput.value.replace(/\D/g, "").slice(0, 6);
+  if (accountCodeInput.value !== digits) accountCodeInput.value = digits;
+  if (digits.length === 6) confirmEmailCode();
+});
+
 // Close the emoji picker / reaction bar when clicking outside them.
 document.addEventListener("click", (e) => {
   if (!dmReactBar.hidden && !dmReactBar.contains(e.target)) closeReactBar();
@@ -4078,6 +4672,12 @@ document.addEventListener("keydown", (e) => {
   if (!logoutConfirm.hidden) {
     e.preventDefault();
     closeLogoutConfirm();
+    return;
+  }
+
+  if (!accountView.hidden) {
+    e.preventDefault();
+    closeAccount();
     return;
   }
 
@@ -4202,6 +4802,8 @@ window.addEventListener("nagora:active", () => {
   renderUsers(usersCache);
   updateTitle();
 });
+
+applyStrings(document.body);
 
 document.addEventListener("DOMContentLoaded", async () => {
   await initSession();
