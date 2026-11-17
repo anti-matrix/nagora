@@ -336,4 +336,31 @@ await ok("email-changed notice: date and time in Brasília time, no link, no cod
   assert.ok(!/\b[0-9]{6}\b/.test(m.text));
 });
 
+console.log("cosmetics:");
+const cosmetics = await import("../lib/cosmetics.js");
+await ok("name color: only account ids 1..10 may use it", () => {
+  for (const id of [1, 5, 10, "7"]) assert.equal(cosmetics.nameColorAllowed({ id }), true, String(id));
+  for (const id of [0, 11, 250, -1, 1.5, null, undefined, "x"]) assert.equal(cosmetics.nameColorAllowed({ id }), false, String(id));
+  assert.equal(cosmetics.nameColorAllowed(null), false);
+  assert.equal(cosmetics.nameColorSql("a"), "CASE WHEN a.id <= 10 THEN a.name_color END");
+});
+await ok("name color: normalized to lowercase #rrggbb", () => {
+  assert.equal(cosmetics.normalizeNameColor("#FF8800"), "#ff8800");
+  assert.equal(cosmetics.normalizeNameColor(" #f80 "), "#ff8800");
+  for (const bad of ["ff8800", "#ff880", "#ff88001", "#gg0000", "red", "", null, 123, "#ff8800;background:red", "url(x)"]) {
+    assert.equal(cosmetics.normalizeNameColor(bad), null, String(bad));
+  }
+});
+await ok("name color: too dark for the background is refused", () => {
+  assert.equal(cosmetics.nameColorProblem("#ffffff"), null);
+  assert.equal(cosmetics.nameColorProblem("#ff4444"), null);
+  assert.equal(cosmetics.nameColorProblem("#4fc3f7"), null);
+  assert.equal(cosmetics.nameColorProblem("#000000"), "contrast");
+  assert.equal(cosmetics.nameColorProblem("#0000ff"), "contrast");
+  assert.equal(cosmetics.nameColorProblem("#2a2a2a"), "contrast");
+  assert.equal(cosmetics.nameColorProblem("blue"), "format");
+  assert.ok(Math.abs(cosmetics.contrastRatio("#ffffff", "#000000") - 21) < 1e-9);
+  assert.equal(cosmetics.contrastRatio("#123456", "#123456"), 1);
+});
+
 console.log(`\nAll ${passed} tests passed.`);
