@@ -236,9 +236,17 @@
                         </div>
                     </div>
                     <form id="account-email-form" novalidate hidden>
+                        <input type="text" id="account-email-username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly hidden />
                         <label class="account-label" for="account-email-input" data-str="emailNewLabel"></label>
                         <div class="account-row">
                             <input type="email" id="account-email-input" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" />
+                        </div>
+                        <label class="account-label" for="account-email-password" data-str="emailPasswordLabel"></label>
+                        <div class="account-row">
+                            <input type="password" id="account-email-password" autocomplete="current-password" />
+                        </div>
+                        <p class="account-note" data-str="emailPasswordNote"></p>
+                        <div class="account-actions">
                             <button type="submit" class="account-btn" id="account-email-send" data-str="emailSendCode"></button>
                             <button type="button" class="account-btn" id="account-email-form-cancel" data-str="accountCancel"></button>
                         </div>
@@ -431,7 +439,7 @@ const STRINGS = {
   emailAdd: "Adicionar e-mail",
   emailChange: "Alterar e-mail",
   emailRemove: "Remover e-mail",
-  emailUnavailable: "O e-mail não está disponível no momento. O resto da sua conta funciona normalmente.",
+  emailUnavailable: "Adicionar ou trocar o e-mail não está disponível no momento. O resto da sua conta funciona normalmente.",
   emailNewLabel: "Novo e-mail",
   emailSendCode: "Enviar código",
   emailInvalid: "Digite um e-mail válido.",
@@ -447,6 +455,9 @@ const STRINGS = {
   emailVerified: "E-mail verificado.",
   emailRemoveNote: "Sem um e-mail verificado você não poderá recuperar sua senha. Digite sua senha atual para remover.",
   emailPasswordLabel: "Senha atual",
+  emailPasswordNote: "Para proteger sua conta, adicionar ou trocar o e-mail pede a sua senha.",
+  emailPasswordMissing: "Digite sua senha atual.",
+  emailPasswordAgain: "Digite sua senha para enviar um novo código.",
   emailRemoveConfirm: "Remover",
   emailPasswordWrong: "Senha incorreta.",
   emailRemoved: "E-mail removido.",
@@ -709,6 +720,8 @@ const accountEmailAdd = document.getElementById("account-email-add");
 const accountEmailRemove = document.getElementById("account-email-remove");
 const accountEmailForm = document.getElementById("account-email-form");
 const accountEmailInput = document.getElementById("account-email-input");
+const accountEmailUsername = document.getElementById("account-email-username");
+const accountEmailPassword = document.getElementById("account-email-password");
 const accountEmailSend = document.getElementById("account-email-send");
 const accountEmailFormCancel = document.getElementById("account-email-form-cancel");
 const accountCodeForm = document.getElementById("account-code-form");
@@ -4248,6 +4261,7 @@ let accountData = null;        // last GET /api/me
 let accountSeq = 0;            // bumped on open / close: stale async results are dropped
 let accountEmailMode = "view"; // "view" | "form" | "code" | "remove"
 let accountPendingEmail = null;
+let accountStartPassword = "";  // in memory only, while the dashboard is open and a code is pending
 let accountResendAt = 0;
 let accountResendTimer = null;
 let accountBusy = false;
@@ -4309,7 +4323,8 @@ function renderAccountDetails() {
 function renderAccountEmail() {
   const d = accountData;
   const available = !!d?.emailConfigured;
-  const mode = available ? accountEmailMode : "view";
+  // Without email configuration only "remove" is left: it sends nothing.
+  const mode = available || accountEmailMode === "remove" ? accountEmailMode : "view";
   const email = d?.email || null;
 
   accountEmailUnavailable.hidden = !d || available;
@@ -4319,10 +4334,9 @@ function renderAccountEmail() {
   accountEmailBadge.hidden = !email;
   accountEmailNoneNote.hidden = !available || !!email || mode !== "view";
 
-  const showActions = available && mode === "view";
-  accountEmailAdd.hidden = !showActions;
+  accountEmailAdd.hidden = !available || mode !== "view";
   accountEmailAdd.textContent = email ? STRINGS.emailChange : STRINGS.emailAdd;
-  accountEmailRemove.hidden = !showActions || !email;
+  accountEmailRemove.hidden = mode !== "view" || !email;
 
   accountEmailForm.hidden = mode !== "form";
   accountCodeForm.hidden = mode !== "code";
@@ -4341,8 +4355,10 @@ function setAccountEmailMode(mode, { keepMessage = false } = {}) {
   accountEmailMode = mode;
   if (!keepMessage) setAccountMessage(accountEmailMessage, "");
   accountRemovePassword.value = "";
+  accountEmailPassword.value = "";
+  if (mode !== "code") accountStartPassword = "";
   renderAccountEmail();
-  if (mode === "form") accountEmailInput.focus();
+  if (mode === "form") (accountEmailInput.value ? accountEmailPassword : accountEmailInput).focus();
   else if (mode === "code") accountCodeInput.focus();
   else if (mode === "remove") accountRemovePassword.focus();
 }
@@ -4419,6 +4435,8 @@ function closeAccount() {
   accountSeq++;
   accountView.hidden = true;
   accountRemovePassword.value = "";
+  accountEmailPassword.value = "";
+  accountStartPassword = "";
   accountCodeInput.value = "";
   clearInterval(accountResendTimer);
   accountResendTimer = null;
@@ -4463,7 +4481,8 @@ async function runEmailAction(fn) {
   renderAccountEmail();
 }
 
-function sendEmailCode(rawEmail, { resend = false } = {}) {
+/** The server asks for the current password on every "start", a resend included. */
+function sendEmailCode(rawEmail, password, { resend = false } = {}) {
   const email = String(rawEmail ?? "").trim().toLowerCase();
   if (!ACCOUNT_EMAIL_RE.test(email) || email.length > 254) {
     setAccountMessage(accountEmailMessage, STRINGS.emailInvalid);
@@ -4473,13 +4492,24 @@ function sendEmailCode(rawEmail, { resend = false } = {}) {
     setAccountMessage(accountEmailMessage, STRINGS.emailSame);
     return;
   }
+  if (!password) {
+    setAccountMessage(accountEmailMessage, STRINGS.emailPasswordMissing);
+    accountEmailPassword.focus();
+    return;
+  }
 
   return runEmailAction(async (stale) => {
-    const { r, data } = await emailRequest({ action: "start", email });
+    const { r, data } = await emailRequest({ action: "start", email, password });
     if (stale()) return null;
-    if (r.status === 429 && data.retryAfterSec) startAccountResendCooldown(data.retryAfterSec);
+    if (r.status === 429 && data.retryAfterSec && accountEmailMode === "code") startAccountResendCooldown(data.retryAfterSec);
     if (r.status === 400) return STRINGS.emailInvalid;
     if (r.status === 409) return STRINGS.emailSame;
+    if (r.status === 403) {
+      // Wrong password: back to the form (a resend lands here if the password changed meanwhile).
+      accountEmailInput.value = email;
+      setAccountEmailMode("form");
+      return STRINGS.emailPasswordWrong;
+    }
     if (!r.ok) return emailErrorText(r, data, STRINGS.emailFailed);
 
     accountPendingEmail = data.pendingEmail || email;
@@ -4487,6 +4517,7 @@ function sendEmailCode(rawEmail, { resend = false } = {}) {
     accountEmailInput.value = "";
     startAccountResendCooldown(data.cooldownSec);
     setAccountEmailMode("code");
+    accountStartPassword = password;
     if (resend) setAccountMessage(accountEmailMessage, STRINGS.emailResent, false, 4000);
     trackAppActivity("email_start");
     return null;
@@ -4577,6 +4608,7 @@ accountShownameForm.addEventListener("submit", async (e) => {
 
 accountEmailAdd.addEventListener("click", () => {
   accountEmailInput.value = "";
+  accountEmailUsername.value = me?.username || "";
   setAccountEmailMode("form");
 });
 accountEmailRemove.addEventListener("click", () => {
@@ -4589,11 +4621,21 @@ accountCodeOther.addEventListener("click", () => {
   accountEmailInput.value = accountPendingEmail || "";
   setAccountEmailMode("form");
 });
-accountCodeResend.addEventListener("click", () => sendEmailCode(accountPendingEmail, { resend: true }));
+accountCodeResend.addEventListener("click", () => {
+  if (accountStartPassword) {
+    sendEmailCode(accountPendingEmail, accountStartPassword, { resend: true });
+    return;
+  }
+  // The dashboard was reopened: the password is not kept, so ask for it again.
+  accountEmailInput.value = accountPendingEmail || "";
+  accountEmailUsername.value = me?.username || "";
+  setAccountEmailMode("form");
+  setAccountMessage(accountEmailMessage, STRINGS.emailPasswordAgain, false);
+});
 
 accountEmailForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  sendEmailCode(accountEmailInput.value);
+  sendEmailCode(accountEmailInput.value, accountEmailPassword.value);
 });
 accountCodeForm.addEventListener("submit", (e) => {
   e.preventDefault();
