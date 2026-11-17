@@ -167,6 +167,14 @@ await ok("windowKey is namespaced and changes only when the window rolls over", 
   assert.notEqual(a, rl.windowKey("room-post", "U1", 180000, 60000));
   assert.notEqual(a, rl.windowKey("room-post", "U2", 120000, 60000));
 });
+await ok("slidingCount weighs the previous window by its remaining overlap", () => {
+  assert.equal(rl.slidingCount(0, 5, 125000, 60000), 5);
+  assert.equal(rl.slidingCount(20, 1, 120000, 60000), 21);  // window just rolled over: all 20 still count
+  assert.equal(rl.slidingCount(20, 1, 150000, 60000), 11);  // halfway: half of them count
+  assert.ok(rl.slidingCount(20, 1, 179999, 60000) < 1.01);  // end of the window: almost none
+  // 20 posts late in one minute do not buy 20 more right after the boundary.
+  assert.equal(rl.decide(rl.slidingCount(20, 1, 121000, 60000), 20, 121000, 60000).allowed, false);
+});
 await ok("decide allows up to the limit, then reports when to retry", () => {
   assert.deepEqual(rl.decide(1, 20, 125000, 60000), { allowed: true, remaining: 19, retryAfterSec: 0 });
   assert.deepEqual(rl.decide(20, 20, 125000, 60000), { allowed: true, remaining: 0, retryAfterSec: 0 });
