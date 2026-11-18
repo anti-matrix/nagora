@@ -543,6 +543,25 @@ await ok("room feed: only accounts with something to show", () => {
   assert.equal(integ.hasActivity({ steam: { player: {} } }), true);
   assert.equal(integ.ROOM_FEED_LIMIT, 50);
 });
+await ok("steam last played: newest rtime_last_played, never-played and private libraries skipped", () => {
+  const p = integ.parseSteamLastPlayed;
+  const json = { response: { game_count: 4, games: [
+    { appid: 10, name: "Old", rtime_last_played: 1600000000 },
+    { appid: 730, name: "Counter-Strike 2", rtime_last_played: 1700000000 },
+    { appid: 20, name: "Never", rtime_last_played: 0 },
+    { appid: "x", name: "Bad id", rtime_last_played: 1800000000 },
+  ] } };
+  assert.deepEqual(p(json), {
+    id: "730", name: "Counter-Strike 2", playedAt: new Date(1700000000 * 1000).toISOString(),
+    capsuleUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/730/capsule_184x69.jpg",
+  });
+  assert.equal(p({ response: {} }), null);              // game details private
+  assert.equal(p({ response: { games: [{ appid: 20, name: "Never", rtime_last_played: 0 }] } }), null);
+  assert.equal(p(null), null);
+  assert.equal(integ.cacheTtlMs("steam-last"), 600000);
+  // The room feed dates a member by it too.
+  assert.equal(integ.feedSortKey({ steam: { player: { game: null }, lastPlayed: { playedAt: "2026-01-02T00:00:00.000Z" } } }).at, Date.parse("2026-01-02T00:00:00.000Z"));
+});
 await ok("cache TTL: Last.fm 30 s, Steam 60 s, freshness by age", () => {
   assert.equal(integ.cacheTtlMs("lastfm"), 30000);
   assert.equal(integ.cacheTtlMs("steam"), 60000);

@@ -751,6 +751,7 @@ const STRINGS = {
   intUnavailable: "Indisponível no momento.",
   intUpdatedAgo: "atualizado {ago}",
   intSteamPlaying: "Jogando agora",
+  intSteamLastPlayed: "Jogou por último",
   intSteamPrivate: "Perfil privado no Steam.",
   intXLastPost: "Último post",
   intXOpen: "Ver no X",
@@ -6048,16 +6049,21 @@ function renderSteam(a) {
   if (a.unavailable || !a.player) return integrationCard("steam", "Steam", STRINGS.intUnavailable);
   const p = a.player;
   const key = `steam${p.state.charAt(0).toUpperCase()}${p.state.slice(1)}`;
-  const card = integrationCard("steam", p.game ? STRINGS.intSteamPlaying : (STRINGS[key] || "Steam"));
+  // In a game: "Jogando agora". Otherwise the last played game when Steam shares it, else the status.
+  const last = !p.game && a.lastPlayed ? a.lastPlayed : null;
+  const label = p.game ? STRINGS.intSteamPlaying : (last ? STRINGS.intSteamLastPlayed : (STRINGS[key] || "Steam"));
+  const card = integrationCard("steam", label, last ? agoText(last.playedAt) : null);
   if (p.game) card.classList.add("live");
+  const shown = p.game || last;
   const body = el("div", "integration-body");
-  if (p.game) {
-    const capsule = externalImage(p.game.capsuleUrl, "integration-capsule");
+  if (shown) {
+    const capsule = externalImage(shown.capsuleUrl, "integration-capsule");
     if (capsule) body.appendChild(capsule);
   }
   const text = el("div", "integration-text");
-  if (p.game) text.appendChild(el("div", "integration-title", p.game.name));
+  if (shown) text.appendChild(el("div", "integration-title", shown.name));
   if (p.personaName) text.appendChild(el("div", "integration-sub", p.personaName));
+  if (last) text.appendChild(el("div", "integration-sub dim", STRINGS[key] || "Steam"));
   if (!p.isPublic) text.appendChild(el("div", "integration-sub dim", STRINGS.intSteamPrivate));
   body.appendChild(text);
   card.appendChild(body);
