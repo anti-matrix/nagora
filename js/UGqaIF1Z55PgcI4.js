@@ -665,7 +665,7 @@ const STRINGS = {
 
   // Account dashboard: "Conexões" (Last.fm, Steam, X; Spotify through Last.fm)
   connTitle: "Conexões",
-  connIntro: "Mostre no seu perfil o que você está ouvindo, jogando e postando.",
+  connIntro: "Mostre no seu perfil o que você está ouvindo, jogando e postando. Tudo que você conectar aparece para todos na NAGORA.",
   connLinked: "Conectado como {handle}",
   connNotLinked: "Não conectado",
   connBadge: "Conectado",
@@ -675,11 +675,6 @@ const STRINGS = {
   connUnlinkTitle: "Desconectar",
   connUnlinkConfirm: "Desconectar {provider} do seu perfil?",
   connUnlinked: "{provider} desconectado.",
-  connVisibility: "Quem vê",
-  connVisEveryone: "Todos",
-  connVisFriends: "Amigos",
-  connVisNobody: "Ninguém",
-  connVisSaved: "Visibilidade salva.",
   connFailed: "Não foi possível concluir. Tente novamente.",
   connRedirecting: "Abrindo {provider}…",
   connLastfmNote: "Mostra a música que você está ouvindo agora ou a última que ouviu.",
@@ -6163,28 +6158,6 @@ function connButton(label, onClick, { danger = false, disabled = false } = {}) {
   return btn;
 }
 
-function visibilitySelect(provider, current) {
-  const wrap = el("label", "account-conn-visibility");
-  wrap.appendChild(el("span", "account-label", STRINGS.connVisibility));
-  const select = el("select", "account-select");
-  for (const [value, key] of [["everyone", "connVisEveryone"], ["friends", "connVisFriends"], ["nobody", "connVisNobody"]]) {
-    const opt = el("option", null, STRINGS[key]);
-    opt.value = value;
-    opt.selected = value === current;
-    select.appendChild(opt);
-  }
-  select.disabled = connBusy;
-  select.addEventListener("change", () => runConnAction(async () => {
-    const { r, data } = await integrationPost({ action: "visibility", provider, visibility: select.value });
-    if (!r.ok) return { text: STRINGS.connFailed };
-    if (connData?.[provider]) connData[provider].visibility = data.visibility;
-    trackAppActivity("integration_visibility");
-    return { ok: true, text: STRINGS.connVisSaved };
-  }));
-  wrap.appendChild(select);
-  return wrap;
-}
-
 function connCard(provider, note) {
   const card = el("div", "account-conn");
   card.id = `account-conn-${provider}`;
@@ -6227,7 +6200,7 @@ async function unlinkProvider(provider) {
   return runConnAction(async () => {
     const { r } = await integrationPost({ action: "unlink", provider });
     if (!r.ok) return { text: STRINGS.connFailed };
-    if (connData?.[provider]) Object.assign(connData[provider], { linked: false, externalId: null, displayName: null, visibility: "everyone", pending: null });
+    if (connData?.[provider]) Object.assign(connData[provider], { linked: false, externalId: null, displayName: null, pending: null });
     trackAppActivity("integration_unlink");
     return { ok: true, text: fillString(STRINGS.connUnlinked, { provider: connProviderName(provider) }) };
   });
@@ -6243,7 +6216,6 @@ function oauthCard(provider, note) {
   }
   if (p.linked) {
     card.appendChild(linkedLine(provider, p));
-    card.appendChild(visibilitySelect(provider, p.visibility));
     const actions = el("div", "account-actions");
     actions.appendChild(connButton(STRINGS.connUnlink, () => unlinkProvider(provider), { danger: true }));
     card.appendChild(actions);
@@ -6310,7 +6282,6 @@ function xCard() {
     card.appendChild(el("div", "account-note", p.lastCheckedAt
       ? fillString(STRINGS.connXLastChecked, { when: formatAccountDate(p.lastCheckedAt, true) })
       : STRINGS.connXNeverChecked));
-    card.appendChild(visibilitySelect("x", p.visibility));
     const actions = el("div", "account-actions");
     actions.appendChild(connButton(STRINGS.connUnlink, () => unlinkProvider("x"), { danger: true }));
     card.appendChild(actions);

@@ -513,17 +513,11 @@ const integ = await import("../lib/integrations.js");
 const roomsLib = await import("../lib/rooms.js");
 const { createHash } = await import("node:crypto");
 
-console.log("integrations: visibility, cache, schedule:");
-await ok("visibility: everyone / friends / nobody, the owner always", () => {
-  const v = integ.canViewIntegration;
-  assert.equal(v("everyone", {}), true);
-  assert.equal(v("friends", { isFriend: false }), false);
-  assert.equal(v("friends", { isFriend: true }), true);
-  assert.equal(v("nobody", { isFriend: true }), false);
-  for (const level of integ.VISIBILITIES) assert.equal(v(level, { isSelf: true }), true);
-  assert.equal(v("bogus", { isFriend: true }), false);
-  assert.equal(integ.normalizeVisibility("friends"), "friends");
-  assert.equal(integ.normalizeVisibility("FRIENDS"), null);
+console.log("integrations: public activity, cache, schedule:");
+await ok("no privacy setting: no visibility rules are exported", () => {
+  assert.equal(integ.canViewIntegration, undefined);
+  assert.equal(integ.normalizeVisibility, undefined);
+  assert.equal(integ.VISIBILITIES, undefined);
 });
 await ok("cache TTL: Last.fm 30 s, Steam 60 s, freshness by age", () => {
   assert.equal(integ.cacheTtlMs("lastfm"), 30000);
