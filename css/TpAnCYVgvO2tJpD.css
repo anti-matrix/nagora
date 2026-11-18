@@ -3036,3 +3036,449 @@ body {
     max-height: 45vh;
   }
 }
+
+/* "Minha conta" + "DASHBOARD" side by side in the expanded profile card */
+.profile-account-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
+}
+.profile-account-row .profile-account-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.profile-account-btn[hidden] {
+  display: none !important;
+}
+
+/* Integrations block: contact panel and rooms sidebar profile
+   (the look of .contact-panel-info-row) */
+.integrations {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  text-align: left;
+}
+.integrations[hidden] {
+  display: none !important;
+}
+.integration-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  min-width: 0;
+}
+.integration-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.integration-head i {
+  color: #888;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.integration-card.live .integration-head i {
+  color: #33ff66;
+}
+.integration-label {
+  color: #888;
+  font-size: 0.8rem;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.integration-meta {
+  margin-left: auto;
+  color: #888;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.integration-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.integration-art {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid #333;
+}
+.integration-capsule {
+  width: 92px;
+  height: auto;
+  flex-shrink: 0;
+  border: 1px solid #333;
+}
+.integration-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.integration-title {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.integration-sub {
+  color: #aaa;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.integration-sub.dim,
+.integration-note {
+  color: #888;
+  font-size: 0.85rem;
+}
+.integration-post {
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.integration-quote {
+  margin: 0;
+  cursor: default;
+}
+.integration-quote .dm-quote-text {
+  overflow-wrap: anywhere;
+}
+.integration-media {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+.integration-media img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  border: 1px solid #333;
+}
+.integration-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.integration-link {
+  color: #aaa;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.integration-link:focus-visible {
+  outline: 1px solid #888;
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .integration-link:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+}
+
+/* Rooms sidebar: the contact panel's look, a small gap from the room messages */
+.room-panel {
+  margin-left: 12px;
+}
+.room-panel-back {
+  right: auto;
+  left: 12px;
+}
+.room-panel-back[hidden],
+.room-panel-close[hidden],
+.room-panel-section[hidden] {
+  display: none !important;
+}
+.room-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 40px;
+  overflow-y: auto;
+}
+.room-panel-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.room-panel-icon {
+  color: #aaa;
+  font-size: 4rem;
+}
+.room-panel-description {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.room-panel-heading {
+  align-self: stretch;
+  margin: 12px 0 0;
+  color: #aaa;
+  font-size: 0.85rem;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.room-panel-posters {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.room-panel-poster {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #222;
+  color: #fff;
+  font-family: inherit;
+  text-align: left;
+}
+.room-panel-poster:focus-visible {
+  outline: 1px solid #888;
+  outline-offset: -1px;
+}
+.room-panel-ago {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #888;
+  font-size: 0.75rem;
+}
+.room-panel-note {
+  padding: 8px 0;
+  color: #888;
+  font-size: 0.85rem;
+  text-align: left;
+}
+#room-panel-profile .contact-panel-name,
+#room-panel-profile .contact-panel-handle {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+#room-panel-profile .contact-panel-status[hidden] {
+  display: none !important;
+}
+#room-panel-profile .user-bubble-actions {
+  align-self: stretch;
+}
+@media (max-width: 768px) {
+  .room-panel {
+    margin-left: 0;
+  }
+  /* The room header opens the room's information on a phone. */
+  .dm-panel.room-mode .dm-header {
+    cursor: pointer;
+  }
+}
+
+/* Account dashboard: "Conexões" (cards with the .account-facts row look) */
+.account-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-conn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+}
+.account-conn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-conn-head i {
+  color: #aaa;
+  font-size: 1.1rem;
+}
+.account-conn-name {
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.account-conn-head .account-badge {
+  margin-left: auto;
+}
+.account-conn-visibility {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.account-select {
+  min-height: 40px;
+  padding: 6px 10px;
+  background: #0d0d0d;
+  border: 1px solid #444;
+  border-radius: 0;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.account-select:focus {
+  border-color: #888;
+  outline: none;
+}
+.account-conn-code {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: #0d0d0d;
+  border: 1px solid #444;
+  color: #fff;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .account-select {
+    min-height: 44px;
+  }
+}
+
+/* Owner DASHBOARD: the login card (auth-card, auth-nav, form-control,
+   btn-light) over a full view like "Minha conta" */
+.owner-view {
+  position: fixed;
+  inset: 0;
+  z-index: 1120;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #fff;
+}
+.owner-view[hidden] {
+  display: none !important;
+}
+.owner-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+.owner-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 64px 16px 32px;
+  box-sizing: border-box;
+}
+.owner-view .owner-title {
+  font-size: clamp(1.6rem, 8vw, 4rem);
+}
+.owner-card .auth-nav button {
+  padding: 14px 6px;
+}
+.owner-card [role="tabpanel"][hidden] {
+  display: none !important;
+}
+.owner-panel-title {
+  color: #fff;
+  font-size: 1.1rem;
+}
+.owner-legend {
+  float: none;
+  font-size: inherit;
+}
+.owner-view .form-check-label {
+  color: #ccc;
+}
+.owner-view .form-check-input {
+  background-color: #0d0d0d;
+  border-color: #444;
+  border-radius: 0;
+}
+.owner-view .form-check-input:checked {
+  background-color: #222;
+  border-color: #fff;
+}
+.owner-view .form-check-input:focus {
+  border-color: #888;
+  box-shadow: none;
+}
+.owner-result {
+  margin-top: 8px;
+  color: #ccc;
+}
+.owner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.owner-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+}
+.owner-row-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.owner-row-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.owner-row-handle {
+  color: #fff;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.owner-row-name {
+  color: #888;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.owner-row-rooms {
+  color: #ff9999;
+  font-size: 0.85rem;
+}
+.owner-row .account-btn {
+  white-space: normal;
+}
+@media (pointer: coarse) {
+  .owner-view .form-check-input {
+    width: 1.3em;
+    height: 1.3em;
+  }
+  .owner-view .form-check {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* The contact panel body scrolls: the integrations block can make it taller than the screen. */
+.contact-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

@@ -43,7 +43,10 @@
                         <div class="profile-requests-heading">Solicitações recebidas</div>
                         <div class="profile-requests-list" id="profile-requests-list"></div>
                     </div>
-                    <button type="button" class="profile-account-btn" id="profile-account-btn" aria-haspopup="dialog" aria-controls="account-view"><i class="bi bi-gear" aria-hidden="true"></i> <span data-str="accountOpen"></span></button>
+                    <div class="profile-account-row">
+                        <button type="button" class="profile-account-btn" id="profile-account-btn" aria-haspopup="dialog" aria-controls="account-view"><i class="bi bi-gear" aria-hidden="true"></i> <span data-str="accountOpen"></span></button>
+                        <button type="button" class="profile-account-btn" id="profile-owner-btn" aria-haspopup="dialog" aria-controls="owner-view" hidden><i class="bi bi-speedometer" aria-hidden="true"></i> <span data-str="ownerOpen"></span></button>
+                    </div>
                     <button type="button" class="profile-logout" id="profile-logout" aria-label="Sair" title="Sair"><i class="bi bi-power"></i></button>
                 </div>
             </div>
@@ -159,6 +162,7 @@
                             <span class="contact-info-value" id="contact-first-conversation-value"></span>
                         </div>
                     </div>
+                    <div class="integrations" id="contact-integrations" hidden></div>
                     <button type="button" class="contact-panel-unfriend" id="contact-panel-unfriend" hidden>Desfazer amizade</button>
                 </div>
                 <div class="contact-tab-panel" id="contact-tab-media-panel" role="tabpanel" aria-labelledby="contact-tab-media" hidden>
@@ -178,9 +182,33 @@
                 </div>
             </div>
         </aside>
+        <aside class="contact-panel room-panel" id="room-panel" hidden data-str-label="roomPanelLabel">
+            <button type="button" class="contact-panel-close room-panel-back" id="room-panel-back" data-str-label="roomPanelBack" hidden><i class="bi bi-arrow-left" aria-hidden="true"></i></button>
+            <button type="button" class="contact-panel-close room-panel-close" id="room-panel-close" data-str-label="roomPanelClose"><i class="bi bi-x" aria-hidden="true"></i></button>
+            <div class="room-panel-scroll">
+                <div class="room-panel-section" id="room-panel-info">
+                    <div class="contact-panel-avatar room-panel-icon" id="room-panel-icon" aria-hidden="true"></div>
+                    <div class="contact-panel-name" id="room-panel-name"></div>
+                    <p class="room-panel-description" id="room-panel-description"></p>
+                    <h5 class="room-panel-heading" data-str="roomPanelRecent"></h5>
+                    <div class="room-panel-posters" id="room-panel-posters"></div>
+                </div>
+                <div class="room-panel-section" id="room-panel-profile" hidden>
+                    <div class="contact-panel-avatar" id="room-profile-avatar"><i class="bi bi-person-circle"></i></div>
+                    <div class="contact-panel-name" id="room-profile-name"></div>
+                    <div class="contact-panel-handle" id="room-profile-handle"></div>
+                    <div class="contact-panel-status" id="room-profile-status"></div>
+                    <div class="user-bubble-created" id="room-profile-created"></div>
+                    <div class="user-bubble-friend" id="room-profile-friend" hidden><i class="bi bi-people-fill" aria-hidden="true"></i><span id="room-profile-friend-text"></span></div>
+                    <div class="user-bubble-actions" id="room-profile-actions"></div>
+                    <div class="integrations" id="room-profile-integrations" hidden></div>
+                </div>
+            </div>
+        </aside>
     </div>
 
     <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
+    <div class="contact-panel-overlay" id="room-panel-overlay" hidden></div>
 
     <div id="dm-lightbox" class="dm-lightbox" hidden>
       <button type="button" class="dm-lightbox-close" id="dm-lightbox-close" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>
@@ -326,6 +354,13 @@
                     <div class="account-message" id="account-email-message" role="status"></div>
                 </section>
 
+                <section class="account-section" id="account-connections-section" aria-labelledby="account-connections-title">
+                    <h3 id="account-connections-title" data-str="connTitle"></h3>
+                    <p class="account-note" data-str="connIntro"></p>
+                    <div class="account-message" id="account-connections-message" role="status"></div>
+                    <div class="account-connections" id="account-connections"></div>
+                </section>
+
                 <section class="account-section" aria-labelledby="account-rooms-title">
                     <h3 id="account-rooms-title" data-str="accountRooms"></h3>
                     <dl class="account-facts">
@@ -338,6 +373,57 @@
                     <h3 id="account-session-title" data-str="accountSession"></h3>
                     <button type="button" class="account-btn danger" id="account-logout"><i class="bi bi-power" aria-hidden="true"></i> <span data-str="accountLogout"></span></button>
                 </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="owner-view" id="owner-view" role="dialog" aria-modal="true" aria-labelledby="owner-title" hidden>
+        <button type="button" class="account-close owner-close" id="owner-close" data-str-label="ownerClose"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        <div class="owner-scroll">
+            <h1 class="nagora-title owner-title" id="owner-title" data-str="ownerTitle"></h1>
+            <div class="auth-card owner-card">
+                <div class="auth-nav" role="tablist" data-str-label="ownerTabs">
+                    <button type="button" class="active" id="owner-tab-bans" role="tab" aria-selected="true" aria-controls="owner-panel-bans" data-str="ownerTabBans"></button>
+                    <button type="button" id="owner-tab-ban" role="tab" aria-selected="false" aria-controls="owner-panel-ban" data-str="ownerTabBan"></button>
+                    <button type="button" id="owner-tab-reserved" role="tab" aria-selected="false" aria-controls="owner-panel-reserved" data-str="ownerTabReserved"></button>
+                </div>
+                <div class="auth-body">
+                    <div id="owner-message" class="mb-3 small" role="status"></div>
+
+                    <div id="owner-panel-bans" role="tabpanel" aria-labelledby="owner-tab-bans">
+                        <div class="mb-3">
+                            <label for="owner-bans-search" class="form-label" data-str="ownerSearchLabel"></label>
+                            <input type="search" class="form-control" id="owner-bans-search" autocomplete="off" autocapitalize="none" spellcheck="false" data-str-placeholder="ownerSearchPlaceholder"/>
+                        </div>
+                        <div class="owner-list" id="owner-bans-list"></div>
+                    </div>
+
+                    <form id="owner-panel-ban" role="tabpanel" aria-labelledby="owner-tab-ban" novalidate hidden>
+                        <div class="mb-3">
+                            <label for="owner-ban-username" class="form-label" data-str="ownerUsernameLabel"></label>
+                            <input type="text" class="form-control" id="owner-ban-username" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40" data-str-placeholder="ownerUsernamePlaceholder"/>
+                            <div class="form-text owner-lookup" id="owner-ban-lookup" aria-live="polite"></div>
+                        </div>
+                        <fieldset class="mb-3">
+                            <legend class="form-label owner-legend" data-str="ownerRoomsLabel"></legend>
+                            <div id="owner-ban-rooms"></div>
+                        </fieldset>
+                        <button type="submit" class="btn btn-light w-100" id="owner-ban-submit" data-str="ownerBanSubmit"></button>
+                        <div class="form-text owner-result" id="owner-ban-result" aria-live="polite"></div>
+                    </form>
+
+                    <div id="owner-panel-reserved" role="tabpanel" aria-labelledby="owner-tab-reserved" hidden>
+                        <h4 class="text-center mb-3 owner-panel-title" data-str="ownerReservedTitle"></h4>
+                        <form class="mb-3" id="owner-reserve-form" novalidate>
+                            <label for="owner-reserve-input" class="form-label" data-str="ownerReserveLabel"></label>
+                            <input type="text" class="form-control mb-2" id="owner-reserve-input" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40"/>
+                            <div class="form-text mb-2" data-str="ownerReserveRule"></div>
+                            <button type="submit" class="btn btn-light w-100" id="owner-reserve-submit" data-str="ownerReserveSubmit"></button>
+                        </form>
+                        <p class="form-text" data-str="ownerReserveNote"></p>
+                        <div class="owner-list" id="owner-reserved-list"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -576,6 +662,136 @@ const STRINGS = {
   imgServerTooBig: "A imagem passou do limite de 1 MB.",
   imgUnsupported: "Formato de imagem não suportado.",
   imgSendFailed: "Falha ao enviar a imagem. Tente novamente.",
+
+  // Account dashboard: "Conexões" (Last.fm, Steam, X; Spotify through Last.fm)
+  connTitle: "Conexões",
+  connIntro: "Mostre no seu perfil o que você está ouvindo, jogando e postando.",
+  connLinked: "Conectado como {handle}",
+  connNotLinked: "Não conectado",
+  connBadge: "Conectado",
+  connUnavailable: "Indisponível no momento.",
+  connLink: "Conectar",
+  connUnlink: "Desconectar",
+  connUnlinkTitle: "Desconectar",
+  connUnlinkConfirm: "Desconectar {provider} do seu perfil?",
+  connUnlinked: "{provider} desconectado.",
+  connVisibility: "Quem vê",
+  connVisEveryone: "Todos",
+  connVisFriends: "Amigos",
+  connVisNobody: "Ninguém",
+  connVisSaved: "Visibilidade salva.",
+  connFailed: "Não foi possível concluir. Tente novamente.",
+  connRedirecting: "Abrindo {provider}…",
+  connLastfmNote: "Mostra a música que você está ouvindo agora ou a última que ouviu.",
+  connSteamNote: "Mostra seu status e o jogo atual. O perfil e os detalhes de jogo precisam estar públicos no Steam.",
+  connXNote: "Mostra o seu post mais recente (sem retweets nem respostas). Para provar que a conta é sua, coloque um código na sua bio do X.",
+  connXHandleLabel: "Seu @ no X",
+  connXHandlePlaceholder: "@usuario",
+  connXGetCode: "Gerar código",
+  connXCodeIntro: "Coloque este código em qualquer lugar da bio de @{handle} e salve. Depois clique em Verificar. O código vale por 15 minutos.",
+  connXCopy: "Copiar código",
+  connXCopied: "Código copiado.",
+  connXVerify: "Verificar",
+  connXVerifying: "Verificando…",
+  connXCancel: "Cancelar",
+  connXDone: "Conta do X conectada. Você já pode tirar o código da bio.",
+  connXNoPost: "Nenhum post original encontrado por enquanto.",
+  connXLastChecked: "Última verificação: {when}",
+  connXNeverChecked: "Ainda não verificado.",
+  connXInvalid: "Digite um @ válido do X.",
+  connXNotInBio: "Não encontramos o código na bio. Salve a bio no X e tente de novo em alguns segundos.",
+  connXNotFound: "Conta do X não encontrada.",
+  connXUnreachable: "O X não respondeu. Tente de novo em instantes.",
+  connXExpired: "O código expirou. Gere um novo.",
+  connTaken: "Esta conta do {provider} já está conectada a outra conta NAGORA.",
+  connResultOk: "{provider} conectado.",
+  connResultDenied: "Conexão com {provider} cancelada.",
+  connResultExpired: "O pedido de conexão com {provider} expirou. Tente de novo.",
+  connResultFailed: "Não foi possível conectar {provider}. Tente de novo.",
+  connResultUnavailable: "{provider} não está disponível no momento.",
+  connSpotifyNote: "O Spotify aparece pelo Last.fm. Conecte o Spotify nas configurações do Last.fm (Aplicativos → Spotify Scrobbling) e depois conecte o Last.fm aqui.",
+  connSpotifyGo: "Ir para o Last.fm",
+
+  // Integrations block (contact panel, rooms sidebar)
+  intNowPlaying: "Ouvindo agora",
+  intLastPlayed: "Ouviu por último",
+  intLastfmPrivate: "O histórico do Last.fm é privado.",
+  intUnavailable: "Indisponível no momento.",
+  intUpdatedAgo: "atualizado {ago}",
+  intSteamPlaying: "Jogando agora",
+  intSteamPrivate: "Perfil privado no Steam.",
+  intXLastPost: "Último post",
+  intXOpen: "Ver no X",
+  intOpenProfile: "Abrir perfil",
+  steamOffline: "Offline no Steam",
+  steamOnline: "Online no Steam",
+  steamBusy: "Ocupado no Steam",
+  steamAway: "Ausente no Steam",
+  steamSnooze: "Ausente no Steam",
+  steamTrade: "Online no Steam",
+  steamPlay: "Online no Steam",
+  agoNow: "agora",
+  agoMinutes: "há {n} min",
+  agoHours: "há {n} h",
+  agoDays: "há {n} d",
+
+  // Rooms sidebar
+  roomPanelLabel: "Informações da sala",
+  roomPanelBack: "Voltar para a sala",
+  roomPanelClose: "Fechar",
+  roomPanelRecent: "Postaram recentemente",
+  roomPanelNoRecent: "Ninguém postou nas últimas 24 horas.",
+  roomPanelLoadFailed: "Não foi possível carregar.",
+  roomPanelOpen: "Abrir informações da sala",
+
+  // Owner DASHBOARD
+  ownerOpen: "DASHBOARD",
+  ownerTitle: "DASHBOARD",
+  ownerClose: "Fechar",
+  ownerTabs: "Seções",
+  ownerTabBans: "Banidos",
+  ownerTabBan: "Banir",
+  ownerTabReserved: "Reservados",
+  ownerSearchLabel: "Buscar",
+  ownerSearchPlaceholder: "@usuário",
+  ownerNoBans: "Ninguém está banido.",
+  ownerNoMatch: "Nenhum banido com esse nome.",
+  ownerAllRooms: "Todas as salas",
+  ownerRemoveBan: "Remover ban: {room}",
+  ownerRemoveAll: "Remover todos",
+  ownerUnbanTitle: "Remover ban",
+  ownerUnbanRoomConfirm: "Remover o ban de @{user} na sala {room}?",
+  ownerUnbanAllConfirm: "Remover todos os bans de @{user}?",
+  ownerUnbanned: "Ban removido de @{user}.",
+  ownerUsernameLabel: "Usuário",
+  ownerUsernamePlaceholder: "@usuário",
+  ownerLookupNone: "Nenhuma conta com esse nome.",
+  ownerLookupFound: "@{user} · {bans}",
+  ownerLookupNoBans: "sem bans",
+  ownerLookupProtected: "@{user} não pode ser banido por você.",
+  ownerLookupFailed: "Não foi possível consultar.",
+  ownerRoomsLabel: "Salas",
+  ownerBanSubmit: "Banir",
+  ownerBanPickRoom: "Escolha pelo menos uma sala.",
+  ownerBanPickUser: "Digite um usuário existente.",
+  ownerBanTitle: "Banir usuário",
+  ownerBanConfirm: "Banir @{user} de: {rooms}?",
+  ownerBanDone: "Bans de @{user} agora: {bans}.",
+  ownerReservedTitle: "Usernames reservados",
+  ownerReserveLabel: "Reservar um nome",
+  ownerReserveRule: "5 a 15 caracteres, sem espaços. Salvo em minúsculas.",
+  ownerReserveSubmit: "Reservar",
+  ownerReserveNote: "Para usar um nome reservado você mesmo, remova-o da lista e depois crie a conta.",
+  ownerReserveDone: "\"{name}\" reservado.",
+  ownerReserveInvalid: "Use de 5 a 15 caracteres, sem espaços.",
+  ownerReserveTaken: "Este nome já pertence a uma conta existente.",
+  ownerReserveDuplicate: "Este nome já está reservado.",
+  ownerReserveRemove: "Remover",
+  ownerReserveRemoved: "\"{name}\" não está mais reservado.",
+  ownerNoReserved: "Nenhum nome reservado.",
+  ownerForbidden: "Você não tem permissão para isso.",
+  ownerFailed: "Não foi possível concluir a ação.",
+  ownerLoading: "Carregando…",
 };
 
 const ROOM_POLL_MS = 2000;
@@ -822,6 +1038,56 @@ const imgCropCancel = document.getElementById("img-crop-cancel");
 const imgCropApply = document.getElementById("img-crop-apply");
 
 const profileAccountBtn = document.getElementById("profile-account-btn");
+const profileOwnerBtn = document.getElementById("profile-owner-btn");
+const accountConnections = document.getElementById("account-connections");
+const accountConnectionsSection = document.getElementById("account-connections-section");
+const accountConnectionsMessage = document.getElementById("account-connections-message");
+const contactIntegrations = document.getElementById("contact-integrations");
+
+const roomPanel = document.getElementById("room-panel");
+const roomPanelOverlay = document.getElementById("room-panel-overlay");
+const roomPanelBack = document.getElementById("room-panel-back");
+const roomPanelClose = document.getElementById("room-panel-close");
+const roomPanelInfo = document.getElementById("room-panel-info");
+const roomPanelIcon = document.getElementById("room-panel-icon");
+const roomPanelName = document.getElementById("room-panel-name");
+const roomPanelDescription = document.getElementById("room-panel-description");
+const roomPanelPosters = document.getElementById("room-panel-posters");
+const roomPanelProfile = document.getElementById("room-panel-profile");
+const roomProfileAvatar = document.getElementById("room-profile-avatar");
+const roomProfileName = document.getElementById("room-profile-name");
+const roomProfileHandle = document.getElementById("room-profile-handle");
+const roomProfileStatus = document.getElementById("room-profile-status");
+const roomProfileCreated = document.getElementById("room-profile-created");
+const roomProfileFriend = document.getElementById("room-profile-friend");
+const roomProfileFriendText = document.getElementById("room-profile-friend-text");
+const roomProfileActions = document.getElementById("room-profile-actions");
+const roomProfileIntegrations = document.getElementById("room-profile-integrations");
+
+const ownerView = document.getElementById("owner-view");
+const ownerClose = document.getElementById("owner-close");
+const ownerMessage = document.getElementById("owner-message");
+const ownerTabs = {
+  bans: document.getElementById("owner-tab-bans"),
+  ban: document.getElementById("owner-tab-ban"),
+  reserved: document.getElementById("owner-tab-reserved"),
+};
+const ownerPanels = {
+  bans: document.getElementById("owner-panel-bans"),
+  ban: document.getElementById("owner-panel-ban"),
+  reserved: document.getElementById("owner-panel-reserved"),
+};
+const ownerBansSearch = document.getElementById("owner-bans-search");
+const ownerBansList = document.getElementById("owner-bans-list");
+const ownerBanUsername = document.getElementById("owner-ban-username");
+const ownerBanLookup = document.getElementById("owner-ban-lookup");
+const ownerBanRooms = document.getElementById("owner-ban-rooms");
+const ownerBanSubmit = document.getElementById("owner-ban-submit");
+const ownerBanResult = document.getElementById("owner-ban-result");
+const ownerReserveForm = document.getElementById("owner-reserve-form");
+const ownerReserveInput = document.getElementById("owner-reserve-input");
+const ownerReserveSubmit = document.getElementById("owner-reserve-submit");
+const ownerReservedList = document.getElementById("owner-reserved-list");
 const accountView = document.getElementById("account-view");
 const accountScroll = document.getElementById("account-scroll");
 const accountClose = document.getElementById("account-close");
@@ -3708,101 +3974,146 @@ logoutConfirmOk.addEventListener("click", async () => {
   location.href = "index.html";
 });
 
-// User bubble: profile popup for a user-list row (non-friends) or a room avatar / name.
-// Shows the large avatar, the name in its color, the account creation date and
-// the friendship state. Friendship is re-checked against the server on open.
-let bubbleSeq = 0;
-let bubbleDetails = null; // null = loading, { failed: true }, or the loaded profile
+// Profile card, shown in two places with the same logic: the user popup
+// (#user-bubble: user-list rows of non-friends) and the rooms sidebar profile
+// (#room-panel-profile: room avatars and sender names). Large avatar, the name
+// in its color, the account creation date, the friendship state and one
+// primary action. Friendship is re-checked against the server on open.
+function makeProfileView(els) {
+  return { ...els, user: null, details: null, seq: 0 };
+}
+
+const bubbleView = makeProfileView({
+  avatar: userBubbleAvatar,
+  name: userBubbleName,
+  handle: userBubbleHandle,
+  created: userBubbleCreated,
+  friend: userBubbleFriend,
+  friendText: userBubbleFriendText,
+  actions: userBubbleActions,
+  status: null,
+  integrations: null,
+  onDecline: () => closeBubble(),
+});
+
+const roomProfileView = makeProfileView({
+  avatar: roomProfileAvatar,
+  name: roomProfileName,
+  handle: roomProfileHandle,
+  created: roomProfileCreated,
+  friend: roomProfileFriend,
+  friendText: roomProfileFriendText,
+  actions: roomProfileActions,
+  status: roomProfileStatus,
+  integrations: roomProfileIntegrations,
+  onDecline: () => renderProfileView(roomProfileView),
+});
 
 function openBubble(user) {
   bubbleUser = user;
-  bubbleDetails = null;
+  bubbleView.user = user;
+  bubbleView.details = null;
   userBubbleAvatar.dataset.key = "";
   userBubble.hidden = false;
-  renderBubble();
-  loadBubbleDetails(user);
+  renderProfileView(bubbleView);
+  loadProfileDetails(bubbleView, user);
 }
 
 function closeBubble() {
-  bubbleSeq++;
+  bubbleView.seq++;
   bubbleUser = null;
-  bubbleDetails = null;
+  bubbleView.user = null;
+  bubbleView.details = null;
   userBubble.hidden = true;
 }
 
-async function loadBubbleDetails(user) {
-  const seq = ++bubbleSeq;
+/** Re-renders every open profile view (after the friend list changed). */
+function renderBubble() {
+  if (bubbleView.user) renderProfileView(bubbleView);
+  if (roomProfileView.user) renderProfileView(roomProfileView);
+}
+
+async function loadProfileDetails(view, user) {
+  const seq = ++view.seq;
   const own = user.userId === me?.userId;
   try {
     const url = own ? "/api/me" : `/api/contact?targetUserId=${encodeURIComponent(user.userId)}`;
     const r = await authFetch(url, { credentials: "include" });
     if (!r.ok) throw new Error(`profile ${r.status}`);
     const data = await r.json();
-    if (seq !== bubbleSeq) return;
+    if (seq !== view.seq) return;
     const details = {
       createdAt: own ? data.createdAt : data.accountCreatedAt,
       friends: !own && !!data.friendsSince,
       hasAvatar: !!data.hasAvatar,
       showname: data.showname || null,
       nameColor: data.nameColor || null,
+      status: own ? null : (data.friendsSince ? userStatus(data) : null),
     };
     // The server decides friendship; a stale local list is refreshed so the
-    // sidebar agrees with what the popup shows.
+    // sidebar agrees with what the profile shows.
     if (!own && details.friends !== social.friendIds.has(user.userId)) {
       await fetchSocial();
-      if (seq !== bubbleSeq) return;
+      if (seq !== view.seq) return;
     }
-    bubbleDetails = details;
+    view.details = details;
   } catch (e) {
     console.warn("[app] user profile:", e);
-    if (seq !== bubbleSeq) return;
-    bubbleDetails = { failed: true };
+    if (seq !== view.seq) return;
+    view.details = { failed: true };
   }
-  renderBubble();
+  renderProfileView(view);
 }
 
-function bubbleButton(label, onClick, primary = false) {
+function profileButton(view, label, onClick, primary = false) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = label;
   if (primary) btn.classList.add("primary");
   if (onClick) btn.addEventListener("click", onClick);
-  userBubbleActions.appendChild(btn);
+  view.actions.appendChild(btn);
   return btn;
 }
 
-function setBubbleLine(icon, text) {
-  userBubbleFriend.hidden = !text;
+function setProfileLine(view, icon, text) {
+  view.friend.hidden = !text;
   if (!text) return;
-  userBubbleFriend.querySelector("i").className = `bi ${icon}`;
-  userBubbleFriendText.textContent = text;
+  view.friend.querySelector("i").className = `bi ${icon}`;
+  view.friendText.textContent = text;
 }
 
-function renderBubble() {
-  if (!bubbleUser) return;
-  const u = bubbleUser;
-  const d = bubbleDetails && !bubbleDetails.failed ? bubbleDetails : null;
+function renderProfileView(view) {
+  if (!view.user) return;
+  const u = view.user;
+  const d = view.details && !view.details.failed ? view.details : null;
   const own = u.userId === me?.userId;
 
   const hasAvatar = d ? d.hasAvatar : (own ? !!me.hasAvatar : !!u.hasAvatar);
   const avatarKey = `${u.userId}:${hasAvatar}:${avatarEpoch}`;
-  if (userBubbleAvatar.dataset.key !== avatarKey) {
-    userBubbleAvatar.dataset.key = avatarKey;
-    setAvatarOrFallback(userBubbleAvatar, u.userId, hasAvatar, "user-bubble-avatar-img");
+  if (view.avatar.dataset.key !== avatarKey) {
+    view.avatar.dataset.key = avatarKey;
+    setAvatarOrFallback(view.avatar, u.userId, hasAvatar, view === bubbleView ? "user-bubble-avatar-img" : "");
   }
 
-  userBubbleName.textContent = displayName(d ? { ...u, showname: d.showname } : (own ? me : u));
-  applyNameColor(userBubbleName, own ? me.nameColor : (d ? d.nameColor : nameColorOf(u.userId, u.nameColor)));
-  userBubbleHandle.textContent = `@${u.username}`;
-  userBubbleCreated.hidden = !!bubbleDetails?.failed;
-  userBubbleCreated.textContent = d
+  view.name.textContent = displayName(d ? { ...u, showname: d.showname } : (own ? me : u));
+  applyNameColor(view.name, own ? me.nameColor : (d ? d.nameColor : nameColorOf(u.userId, u.nameColor)));
+  view.handle.textContent = `@${u.username}`;
+  if (view.status) {
+    // Presence is only known (and only shown) for friends.
+    const status = d?.status || null;
+    view.status.hidden = !status;
+    view.status.textContent = status ? STATUS_LABELS[status] : "";
+    view.status.className = `contact-panel-status${status ? ` ${status}` : ""}`;
+  }
+  view.created.hidden = !!view.details?.failed;
+  view.created.textContent = d
     ? fillString(STRINGS.bubbleCreated, { date: formatAccountDate(d.createdAt) })
     : STRINGS.bubbleLoading;
-  userBubbleActions.innerHTML = "";
+  view.actions.innerHTML = "";
 
   if (own) {
-    setBubbleLine("bi-person-fill", STRINGS.bubbleYou);
-    bubbleButton(STRINGS.bubbleOpenAccount, () => openAccount(), true);
+    setProfileLine(view, "bi-person-fill", STRINGS.bubbleYou);
+    profileButton(view, STRINGS.bubbleOpenAccount, () => openAccount(), true);
     return;
   }
 
@@ -3810,48 +4121,48 @@ function renderBubble() {
   const incoming = social.incoming.has(u.userId);
   const outgoing = social.outgoing.has(u.userId);
 
-  if (!isFriend && !bubbleDetails) {
+  if (!isFriend && !view.details) {
     // Still asking the server: a stale local list must not offer "Enviar solicitação".
-    setBubbleLine("", "");
+    setProfileLine(view, "", "");
     return;
   }
 
   if (!isFriend && !social.friendsLoaded && !d) {
     // Neither the friend list nor the profile loaded: we cannot tell friend from
     // stranger, so do not offer "Enviar solicitação".
-    setBubbleLine("", "");
+    setProfileLine(view, "", "");
     const note = document.createElement("div");
     note.className = "user-bubble-error";
     note.textContent = STRINGS.bubbleFriendsFailed;
-    userBubbleActions.appendChild(note);
-    const retry = bubbleButton(STRINGS.bubbleRetry, async () => {
+    view.actions.appendChild(note);
+    const retry = profileButton(view, STRINGS.bubbleRetry, async () => {
       retry.disabled = true;
       retry.textContent = STRINGS.bubbleLoading;
       await fetchSocial();
-      if (bubbleUser === u) loadBubbleDetails(u);
+      if (view.user === u) loadProfileDetails(view, u);
     });
     return;
   }
 
   if (isFriend) {
-    setBubbleLine("bi-people-fill", STRINGS.bubbleFriends);
-    bubbleButton(STRINGS.bubbleGoToDms, () => selectUser(u), true);
+    setProfileLine(view, "bi-people-fill", STRINGS.bubbleFriends);
+    profileButton(view, STRINGS.bubbleGoToDms, () => selectUser(u), true);
   } else if (incoming) {
-    setBubbleLine("bi-person-plus-fill", STRINGS.bubbleIncoming);
-    bubbleButton(STRINGS.bubbleAccept, async () => {
+    setProfileLine(view, "bi-person-plus-fill", STRINGS.bubbleIncoming);
+    profileButton(view, STRINGS.bubbleAccept, async () => {
       const ok = await answerRequest(u.userId, "accept");
       if (ok) selectUser(u);
     }, true);
-    bubbleButton(STRINGS.bubbleDecline, async () => {
+    profileButton(view, STRINGS.bubbleDecline, async () => {
       await answerRequest(u.userId, "decline");
-      closeBubble();
+      view.onDecline();
     });
   } else if (outgoing) {
-    setBubbleLine("", "");
-    bubbleButton(STRINGS.bubbleRequestSent).disabled = true;
+    setProfileLine(view, "", "");
+    profileButton(view, STRINGS.bubbleRequestSent).disabled = true;
   } else {
-    setBubbleLine("", "");
-    const btn = bubbleButton(STRINGS.bubbleSendRequest, async () => {
+    setProfileLine(view, "", "");
+    const btn = profileButton(view, STRINGS.bubbleSendRequest, async () => {
       btn.disabled = true;
       try {
         const r = await authFetch("/api/friends", {
@@ -3864,18 +4175,18 @@ function renderBubble() {
         await fetchSocial();
         await fetchIncomingBadge();
         trackAppActivity("friend_request_send");
-        if (bubbleUser === u) renderBubble();
+        if (view.user === u) renderProfileView(view);
       } catch (e) {
         console.warn("[app] send request:", e);
         // e.g. 409 "already friends" when the local friend list was stale.
         await fetchSocial();
-        if (bubbleUser !== u) return;
-        renderBubble();
+        if (view.user !== u) return;
+        renderProfileView(view);
         if (!social.friendIds.has(u.userId) && !social.outgoing.has(u.userId)) {
           const note = document.createElement("div");
           note.className = "user-bubble-error";
           note.textContent = STRINGS.bubbleSendFailed;
-          userBubbleActions.prepend(note);
+          view.actions.prepend(note);
         }
       }
     }, true);
@@ -3980,6 +4291,7 @@ function closeContactPanel() {
   contactPanel.classList.remove("open");
   contactPanelOpen = false;
   currentContact = null;
+  unwatchIntegrations(contactIntegrations);
   if (window.innerWidth <= 768) {
     setTimeout(() => {
       contactPanel.hidden = true;
@@ -4001,6 +4313,8 @@ function populateContactPanel() {
   contactLastSeen.textContent = "";
 
   const targetId = selectedUser.userId;
+  // Same integrations block as the rooms sidebar profile.
+  watchIntegrations(contactIntegrations, targetId);
   authFetch(`/api/contact?targetUserId=${encodeURIComponent(selectedUser.userId)}`, { credentials: "include" })
     .then(async (r) => {
       if (!r.ok) return;
@@ -4036,6 +4350,13 @@ function populateContactPanel() {
 dmHeader.addEventListener("click", (e) => {
   if (e.target.closest("button")) return;
   e.stopPropagation();
+  if (currentRoom) {
+    // Room header: the room's information (off-canvas on a phone).
+    if (roomBanned) return;
+    showRoomInfo();
+    openRoomPanelMobile();
+    return;
+  }
   openContactPanel();
 });
 
@@ -4089,6 +4410,8 @@ function setMyRoomState(data) {
   }
   if (typeof data?.role === "string") myRole = data.role;
   if (Array.isArray(data?.rooms)) roomNames = data.rooms;
+  if (data?.descriptions && typeof data.descriptions === "object") roomDescriptionsMap = data.descriptions;
+  renderOwnerButton();
 }
 
 function amMod() {
@@ -4189,6 +4512,7 @@ function showBanPopup() {
   closeModConfirm(false);
   dmPanel.classList.add("room-banned");
   setComposerDisabled(true);
+  syncRoomPanel(); // hides the rooms sidebar
   roomBanTitle.textContent = STRINGS.bannedTitle;
   roomBanMessage.textContent = banMessage(myBans);
   roomBan.hidden = false;
@@ -4215,6 +4539,8 @@ function leaveRoom() {
   hideBanPopup();
   clearReply();
   dmPanel.classList.remove("room-mode");
+  roomPanelOpenMobile = false;
+  showRoomInfo(); // also hides the rooms sidebar (no room)
   renderRooms();
 }
 
@@ -4241,6 +4567,10 @@ async function openRoom(name) {
   resetRoomMessages();
   hideBanPopup();
   clearReply();
+  roomPanelOpenMobile = false;
+  showRoomInfo();
+  renderRoomInfoHeader(name);
+  roomPanelPosters.innerHTML = "";
 
   dmPlaceholder.hidden = true;
   dmPanel.hidden = false;
@@ -4266,6 +4596,7 @@ async function openRoom(name) {
     showBanPopup();
     return;
   }
+  loadRoomInfo();
 
   // If the state request failed, the messages request still enforces the ban (403).
   await pollRoom();
@@ -4525,16 +4856,12 @@ async function reactToRoomMessage(message, emoji) {
   if (epoch === roomEpoch && roomMessages.includes(message)) renderRoomMessages({ scroll: "auto" });
 }
 
-function openSenderBubble(m, e) {
-  e.stopPropagation(); // keep the document click-outside handler from closing it again
+/** A sender's avatar or name: their profile in the rooms sidebar (yours included). */
+function openSenderProfile(m, e) {
+  e.stopPropagation();
   closeReactionPopovers();
   closeModMenu();
-  if (m.senderId === me.userId) {
-    openBubble(me);
-    return;
-  }
-  const cached = usersCache.find(u => u.userId === m.senderId);
-  openBubble(cached || {
+  openRoomProfile({
     userId: m.senderId,
     username: m.senderUsername,
     showname: m.senderShowname || null,
@@ -4599,7 +4926,7 @@ function renderRoomMessages(options = {}) {
     avatar.className = "room-msg-avatar";
     avatar.setAttribute("aria-label", fillString(STRINGS.roomViewProfile, { name }));
     setAvatarOrFallback(avatar, m.senderId, m.senderHasAvatar, "");
-    avatar.addEventListener("click", (e) => openSenderBubble(m, e));
+    avatar.addEventListener("click", (e) => openSenderProfile(m, e));
     row.appendChild(avatar);
 
     const bubble = document.createElement("div");
@@ -4613,7 +4940,7 @@ function renderRoomMessages(options = {}) {
     senderName.className = "room-sender-name";
     senderName.textContent = name;
     applyNameColor(senderName, nameColorOf(m.senderId, m.senderNameColor));
-    senderName.addEventListener("click", (e) => openSenderBubble(m, e));
+    senderName.addEventListener("click", (e) => openSenderProfile(m, e));
     sender.appendChild(senderName);
     if (m.senderIsMod) {
       const badge = document.createElement("span");
@@ -5215,11 +5542,16 @@ function openAccount() {
   renderAccountProfile();
   accountClose.focus();
   loadAccount();
+  setAccountMessage(accountConnectionsMessage, "");
+  connBusy = false;
+  renderConnections();
+  loadConnections();
 }
 
 function closeAccount() {
   if (accountView.hidden) return;
   accountSeq++;
+  connSeq++;
   accountView.hidden = true;
   accountColorDraft = undefined; // an unsaved color is dropped
   accountRemovePassword.value = "";
@@ -5441,6 +5773,1042 @@ accountCodeInput.addEventListener("input", () => {
   if (digits.length === 6) confirmEmailCode();
 });
 
+// ── Integrations block (contact panel and rooms sidebar) ────────────────
+// Last.fm and Steam are fetched by the server on demand (cached 30 s / 60 s);
+// the X post is the one stored at the owner's last check. Everything from a
+// provider is set with textContent / appendLinkifiedText; images only from
+// the https URLs the server already checked, with no referrer.
+const INTEGRATION_REFRESH_MS = 30000;
+const PROVIDER_LABELS = { lastfm: "Last.fm", steam: "Steam", x: "X", spotify: "Spotify" };
+const PROVIDER_ICONS = { lastfm: "bi-vinyl-fill", steam: "bi-steam", x: "bi-twitter", spotify: "bi-spotify" };
+const integrationWatches = new Map(); // container → { userId, seq, timer }
+
+function agoText(when) {
+  const t = typeof when === "number" ? when : Date.parse(when);
+  if (!Number.isFinite(t)) return "";
+  const min = Math.floor((Date.now() - t) / 60000);
+  if (min < 1) return STRINGS.agoNow;
+  if (min < 60) return fillString(STRINGS.agoMinutes, { n: min });
+  const h = Math.floor(min / 60);
+  if (h < 24) return fillString(STRINGS.agoHours, { n: h });
+  return fillString(STRINGS.agoDays, { n: Math.floor(h / 24) });
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function externalImage(url, className, alt = "") {
+  if (typeof url !== "string" || !url.startsWith("https://")) return null;
+  const img = el("img", className);
+  img.alt = alt;
+  img.loading = "lazy";
+  img.referrerPolicy = "no-referrer";
+  img.addEventListener("error", () => img.remove());
+  img.src = url;
+  return img;
+}
+
+function externalLink(url, label) {
+  if (typeof url !== "string" || !url.startsWith("https://")) return null;
+  const a = el("a", "integration-link");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.append(el("span", null, label), " ");
+  const icon = el("i", "bi bi-box-arrow-up-right");
+  icon.setAttribute("aria-hidden", "true");
+  a.appendChild(icon);
+  return a;
+}
+
+/** One card: icon + label line, then the body. */
+function integrationCard(provider, label, meta) {
+  const card = el("div", `integration-card integration-${provider}`);
+  const head = el("div", "integration-head");
+  const icon = el("i", `bi ${PROVIDER_ICONS[provider]}`);
+  icon.setAttribute("aria-hidden", "true");
+  head.append(icon, el("span", "integration-label", label));
+  if (meta) head.appendChild(el("span", "integration-meta", meta));
+  card.appendChild(head);
+  return card;
+}
+
+function renderLastfm(a) {
+  const t = a.track;
+  if (a.unavailable) return integrationCard("lastfm", "Last.fm", STRINGS.intUnavailable);
+  if (a.private || !t) {
+    const card = integrationCard("lastfm", "Last.fm");
+    card.appendChild(el("div", "integration-note", a.private ? STRINGS.intLastfmPrivate : `@${a.handle}`));
+    return card;
+  }
+  const meta = t.nowPlaying ? null : (t.playedAt ? agoText(t.playedAt) : null);
+  const card = integrationCard("lastfm", t.nowPlaying ? STRINGS.intNowPlaying : STRINGS.intLastPlayed, meta);
+  if (t.nowPlaying) card.classList.add("live");
+  const body = el("div", "integration-body");
+  const art = externalImage(t.imageUrl, "integration-art");
+  if (art) body.appendChild(art);
+  const text = el("div", "integration-text");
+  text.append(el("div", "integration-title", t.title), el("div", "integration-sub", t.artist));
+  if (t.album) text.appendChild(el("div", "integration-sub dim", t.album));
+  body.appendChild(text);
+  card.appendChild(body);
+  const foot = el("div", "integration-foot");
+  const link = externalLink(a.profileUrl, `Last.fm · @${a.handle}`);
+  if (link) foot.appendChild(link);
+  if (a.stale && a.ageSec) foot.appendChild(el("span", "integration-meta", fillString(STRINGS.intUpdatedAgo, { ago: agoText(Date.now() - a.ageSec * 1000) })));
+  card.appendChild(foot);
+  return card;
+}
+
+function renderSteam(a) {
+  if (a.unavailable || !a.player) return integrationCard("steam", "Steam", STRINGS.intUnavailable);
+  const p = a.player;
+  const key = `steam${p.state.charAt(0).toUpperCase()}${p.state.slice(1)}`;
+  const card = integrationCard("steam", p.game ? STRINGS.intSteamPlaying : (STRINGS[key] || "Steam"));
+  if (p.game) card.classList.add("live");
+  const body = el("div", "integration-body");
+  if (p.game) {
+    const capsule = externalImage(p.game.capsuleUrl, "integration-capsule");
+    if (capsule) body.appendChild(capsule);
+  }
+  const text = el("div", "integration-text");
+  if (p.game) text.appendChild(el("div", "integration-title", p.game.name));
+  if (p.personaName) text.appendChild(el("div", "integration-sub", p.personaName));
+  if (!p.isPublic) text.appendChild(el("div", "integration-sub dim", STRINGS.intSteamPrivate));
+  body.appendChild(text);
+  card.appendChild(body);
+  const link = externalLink(p.profileUrl, STRINGS.intOpenProfile);
+  if (link) {
+    const foot = el("div", "integration-foot");
+    foot.appendChild(link);
+    card.appendChild(foot);
+  }
+  return card;
+}
+
+function renderXPost(a) {
+  const post = a.post;
+  const card = integrationCard("x", `${STRINGS.intXLastPost} · @${a.handle}`, post.createdAt ? formatAccountDate(post.createdAt, true) : null);
+  if (post.text) {
+    const text = el("div", "integration-post");
+    appendLinkifiedText(post.text, text);
+    card.appendChild(text);
+  }
+  if (post.quote) {
+    const quote = el("div", "dm-quote integration-quote");
+    quote.appendChild(el("div", "dm-quote-name", post.quote.author ? `@${post.quote.author}` : ""));
+    const qt = el("div", "dm-quote-text");
+    appendLinkifiedText(post.quote.text || "", qt);
+    quote.appendChild(qt);
+    card.appendChild(quote);
+  }
+  if (Array.isArray(post.media) && post.media.length) {
+    const grid = el("div", "integration-media");
+    for (const url of post.media.slice(0, 4)) {
+      const img = externalImage(url, "");
+      if (img) grid.appendChild(img);
+    }
+    if (grid.childElementCount) card.appendChild(grid);
+  }
+  const link = externalLink(post.url, STRINGS.intXOpen);
+  if (link) {
+    const foot = el("div", "integration-foot");
+    foot.appendChild(link);
+    card.appendChild(foot);
+  }
+  return card;
+}
+
+function renderIntegrations(container, activity) {
+  container.innerHTML = "";
+  if (activity?.lastfm) container.appendChild(renderLastfm(activity.lastfm));
+  if (activity?.steam) container.appendChild(renderSteam(activity.steam));
+  if (activity?.x?.post) container.appendChild(renderXPost(activity.x));
+  container.hidden = !container.childElementCount;
+}
+
+async function fetchIntegrations(container, userId) {
+  const watch = integrationWatches.get(container);
+  if (!watch || watch.userId !== userId) return;
+  const seq = ++watch.seq;
+  try {
+    const r = await authFetch(`/api/integrations?type=activity&userId=${encodeURIComponent(userId)}`, { credentials: "include" });
+    if (!r.ok) throw new Error(`activity ${r.status}`);
+    const data = await r.json();
+    if (integrationWatches.get(container) !== watch || seq !== watch.seq) return;
+    renderIntegrations(container, data.activity);
+  } catch (e) {
+    // A failed refresh keeps what is on screen.
+    console.warn("[app] integrations:", e);
+  }
+}
+
+/** Shows `userId`'s integrations in `container` and refreshes them every 30 s while visible. */
+function watchIntegrations(container, userId) {
+  unwatchIntegrations(container);
+  container.innerHTML = "";
+  container.hidden = true;
+  const watch = { userId, seq: 0, timer: null };
+  integrationWatches.set(container, watch);
+  watch.timer = setInterval(() => {
+    if (document.visibilityState === "visible") fetchIntegrations(container, userId);
+  }, INTEGRATION_REFRESH_MS);
+  fetchIntegrations(container, userId);
+}
+
+function unwatchIntegrations(container) {
+  const watch = integrationWatches.get(container);
+  if (watch) clearInterval(watch.timer);
+  integrationWatches.delete(container);
+}
+
+// ── Rooms sidebar ───────────────────────────────────────────────────────
+// A right column in room mode (an off-canvas panel at 768 px and below, like
+// the contact panel). With nobody selected it shows the room; a sender's
+// avatar or name opens their profile there (the user popup is not used in rooms).
+const MOBILE_MAX_WIDTH = 768;
+let roomDescriptionsMap = {};
+let roomPanelMode = "info";   // "info" | "profile"
+let roomPanelOpenMobile = false;
+let roomInfoSeq = 0;
+
+function isMobileLayout() {
+  return window.innerWidth <= MOBILE_MAX_WIDTH;
+}
+
+/** Desktop: visible whenever a room is open and allowed. Mobile: only when opened. */
+function syncRoomPanel() {
+  const inRoom = !!currentRoom && !roomBanned;
+  const mobile = isMobileLayout();
+  const show = inRoom && (!mobile || roomPanelOpenMobile);
+  roomPanel.hidden = !show;
+  roomPanelOverlay.hidden = !(show && mobile);
+  roomPanel.classList.toggle("open", show && mobile);
+  roomPanelClose.hidden = !mobile;
+  roomPanelBack.hidden = roomPanelMode !== "profile";
+  roomPanelInfo.hidden = roomPanelMode !== "info";
+  roomPanelProfile.hidden = roomPanelMode !== "profile";
+  if (!show) unwatchIntegrations(roomProfileIntegrations);
+  else if (roomPanelMode === "profile" && roomProfileView.user && !integrationWatches.has(roomProfileIntegrations)) {
+    watchIntegrations(roomProfileIntegrations, roomProfileView.user.userId);
+  }
+}
+
+function openRoomPanelMobile() {
+  if (!isMobileLayout()) return;
+  closeDrawer();
+  roomPanelOpenMobile = true;
+  syncRoomPanel();
+  setTimeout(() => (roomPanelMode === "profile" ? roomPanelBack : roomPanelClose).focus(), 0);
+}
+
+function closeRoomPanelMobile() {
+  roomPanelOpenMobile = false;
+  syncRoomPanel();
+}
+
+function showRoomInfo() {
+  roomPanelMode = "info";
+  roomProfileView.seq++;
+  roomProfileView.user = null;
+  roomProfileView.details = null;
+  unwatchIntegrations(roomProfileIntegrations);
+  syncRoomPanel();
+}
+
+function renderRoomInfoHeader(name) {
+  roomPanelIcon.innerHTML = "";
+  const glyph = el("i", `bi ${ROOM_ICONS[name] || ROOM_ICON_FALLBACK}`);
+  roomPanelIcon.appendChild(glyph);
+  roomPanelName.textContent = name;
+  roomPanelDescription.textContent = roomDescriptionsMap[name] || "";
+}
+
+async function loadRoomInfo() {
+  if (!currentRoom || roomBanned) return;
+  const room = currentRoom;
+  const seq = ++roomInfoSeq;
+  renderRoomInfoHeader(room);
+  roomPanelPosters.innerHTML = "";
+  roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.bubbleLoading));
+  try {
+    const { r, data, banned } = await roomRequest(`/api/rooms?type=info&room=${encodeURIComponent(room)}`);
+    if (seq !== roomInfoSeq || room !== currentRoom || banned) return;
+    if (!r.ok) throw new Error(`room info ${r.status}`);
+    if (data.description) roomDescriptionsMap[room] = data.description;
+    renderRoomInfoHeader(room);
+    renderRoomPosters(data.recentPosters || []);
+  } catch (e) {
+    console.warn("[app] room info:", e);
+    if (seq !== roomInfoSeq) return;
+    roomPanelPosters.innerHTML = "";
+    roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.roomPanelLoadFailed));
+  }
+}
+
+function renderRoomPosters(posters) {
+  roomPanelPosters.innerHTML = "";
+  if (!posters.length) {
+    roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.roomPanelNoRecent));
+    return;
+  }
+  for (const p of posters) {
+    const row = el("button", "user-row room-panel-poster");
+    row.type = "button";
+    const avatar = el("span", "user-row-avatar");
+    setAvatarOrFallback(avatar, p.userId, p.hasAvatar, "");
+    const name = el("span", "username", displayName(p));
+    applyNameColor(name, nameColorOf(p.userId, p.nameColor));
+    row.append(avatar, name, el("span", "room-panel-ago", agoText(p.lastPostAt)));
+    row.addEventListener("click", () => openRoomProfile(p));
+    roomPanelPosters.appendChild(row);
+  }
+}
+
+/** A room member's profile in the rooms sidebar. */
+function openRoomProfile(user) {
+  if (!currentRoom) return;
+  const own = user.userId === me?.userId;
+  const cached = own ? me : usersCache.find(u => u.userId === user.userId);
+  const u = cached ? { ...user, ...cached } : user;
+  roomPanelMode = "profile";
+  roomProfileView.user = u;
+  roomProfileView.details = null;
+  roomProfileAvatar.dataset.key = "";
+  renderProfileView(roomProfileView);
+  loadProfileDetails(roomProfileView, u);
+  watchIntegrations(roomProfileIntegrations, u.userId);
+  syncRoomPanel();
+  if (isMobileLayout()) openRoomPanelMobile();
+}
+
+roomPanelBack.addEventListener("click", () => {
+  showRoomInfo();
+  roomPanelClose.focus();
+});
+roomPanelClose.addEventListener("click", closeRoomPanelMobile);
+roomPanelOverlay.addEventListener("click", closeRoomPanelMobile);
+window.addEventListener("resize", () => {
+  if (!isMobileLayout()) roomPanelOpenMobile = false;
+  if (currentRoom) syncRoomPanel();
+});
+
+// ── Account dashboard: "Conexões" ───────────────────────────────────────
+let connData = null;      // GET /api/integrations?type=mine
+let connSeq = 0;
+let connBusy = false;
+let connXHandleDraft = "";
+
+function connProviderName(p) {
+  return PROVIDER_LABELS[p] || p;
+}
+
+async function loadConnections() {
+  const seq = ++connSeq;
+  try {
+    const r = await authFetch("/api/integrations?type=mine", { credentials: "include" });
+    if (!r.ok) throw new Error(`integrations ${r.status}`);
+    const data = await r.json();
+    if (seq !== connSeq || accountView.hidden) return;
+    connData = data.providers || null;
+  } catch (e) {
+    console.warn("[app] connections:", e);
+    if (seq !== connSeq) return;
+    connData = null;
+    setAccountMessage(accountConnectionsMessage, STRINGS.connFailed);
+  }
+  renderConnections();
+}
+
+async function integrationPost(body) {
+  const r = await authFetch("/api/integrations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { r, data };
+}
+
+/** Runs one connection action at a time; `fn` returns the message to show, if any. */
+async function runConnAction(fn) {
+  if (connBusy) return;
+  connBusy = true;
+  renderConnections();
+  const seq = accountSeq;
+  let outcome = null;
+  try {
+    outcome = await fn();
+  } catch (e) {
+    console.warn("[app] connection action:", e);
+    outcome = { text: STRINGS.connFailed };
+  } finally {
+    connBusy = false;
+  }
+  if (seq !== accountSeq) return;
+  if (outcome?.text) setAccountMessage(accountConnectionsMessage, outcome.text, !outcome.ok, outcome.ok ? 6000 : 0);
+  renderConnections();
+}
+
+function connButton(label, onClick, { danger = false, disabled = false } = {}) {
+  const btn = el("button", `account-btn${danger ? " danger" : ""}`, label);
+  btn.type = "button";
+  btn.disabled = connBusy || disabled;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+function visibilitySelect(provider, current) {
+  const wrap = el("label", "account-conn-visibility");
+  wrap.appendChild(el("span", "account-label", STRINGS.connVisibility));
+  const select = el("select", "account-select");
+  for (const [value, key] of [["everyone", "connVisEveryone"], ["friends", "connVisFriends"], ["nobody", "connVisNobody"]]) {
+    const opt = el("option", null, STRINGS[key]);
+    opt.value = value;
+    opt.selected = value === current;
+    select.appendChild(opt);
+  }
+  select.disabled = connBusy;
+  select.addEventListener("change", () => runConnAction(async () => {
+    const { r, data } = await integrationPost({ action: "visibility", provider, visibility: select.value });
+    if (!r.ok) return { text: STRINGS.connFailed };
+    if (connData?.[provider]) connData[provider].visibility = data.visibility;
+    trackAppActivity("integration_visibility");
+    return { ok: true, text: STRINGS.connVisSaved };
+  }));
+  wrap.appendChild(select);
+  return wrap;
+}
+
+function connCard(provider, note) {
+  const card = el("div", "account-conn");
+  card.id = `account-conn-${provider}`;
+  const head = el("div", "account-conn-head");
+  const icon = el("i", `bi ${PROVIDER_ICONS[provider]}`);
+  icon.setAttribute("aria-hidden", "true");
+  head.append(icon, el("span", "account-conn-name", connProviderName(provider)));
+  const p = connData?.[provider];
+  if (p?.linked) head.appendChild(el("span", "account-badge", STRINGS.connBadge));
+  card.appendChild(head);
+  if (note) card.appendChild(el("p", "account-note", note));
+  return card;
+}
+
+function linkedLine(provider, p) {
+  const handle = provider === "steam" ? (p.displayName || p.externalId) : `@${p.externalId}`;
+  return el("div", "account-value", fillString(STRINGS.connLinked, { handle }));
+}
+
+function startProviderLink(provider) {
+  return runConnAction(async () => {
+    const { r, data } = await integrationPost({ action: "start", provider });
+    if (r.status === 429 && data.error) return { text: data.error };
+    if (r.status === 503) return { text: fillString(STRINGS.connResultUnavailable, { provider: connProviderName(provider) }) };
+    if (!r.ok || typeof data.url !== "string" || !data.url.startsWith("https://")) return { text: STRINGS.connFailed };
+    trackAppActivity("integration_link_start");
+    setAccountMessage(accountConnectionsMessage, fillString(STRINGS.connRedirecting, { provider: connProviderName(provider) }), false);
+    location.href = data.url;
+    return null;
+  });
+}
+
+async function unlinkProvider(provider) {
+  const ok = await confirmModAction({
+    title: STRINGS.connUnlinkTitle,
+    message: fillString(STRINGS.connUnlinkConfirm, { provider: connProviderName(provider) }),
+    okLabel: STRINGS.connUnlink,
+  });
+  if (!ok) return;
+  return runConnAction(async () => {
+    const { r } = await integrationPost({ action: "unlink", provider });
+    if (!r.ok) return { text: STRINGS.connFailed };
+    if (connData?.[provider]) Object.assign(connData[provider], { linked: false, externalId: null, displayName: null, visibility: "everyone", pending: null });
+    trackAppActivity("integration_unlink");
+    return { ok: true, text: fillString(STRINGS.connUnlinked, { provider: connProviderName(provider) }) };
+  });
+}
+
+function oauthCard(provider, note) {
+  const p = connData?.[provider];
+  const card = connCard(provider, note);
+  if (!p) return card;
+  if (!p.available && !p.linked) {
+    card.appendChild(el("p", "account-note warn", STRINGS.connUnavailable));
+    return card;
+  }
+  if (p.linked) {
+    card.appendChild(linkedLine(provider, p));
+    card.appendChild(visibilitySelect(provider, p.visibility));
+    const actions = el("div", "account-actions");
+    actions.appendChild(connButton(STRINGS.connUnlink, () => unlinkProvider(provider), { danger: true }));
+    card.appendChild(actions);
+    if (!p.available) card.appendChild(el("p", "account-note warn", STRINGS.connUnavailable));
+  } else {
+    card.appendChild(el("div", "account-value empty", STRINGS.connNotLinked));
+    const actions = el("div", "account-actions");
+    actions.appendChild(connButton(STRINGS.connLink, () => startProviderLink(provider)));
+    card.appendChild(actions);
+  }
+  return card;
+}
+
+function xErrorText(r, data) {
+  if (r.status === 429 && data.error) return data.error;
+  if (r.status === 409) return fillString(STRINGS.connTaken, { provider: "X" });
+  if (data.error === "Invalid handle") return STRINGS.connXInvalid;
+  if (data.error === "No pending code") return STRINGS.connXExpired;
+  if (data.error === "Code not found in bio") return STRINGS.connXNotInBio;
+  if (r.status === 404) return STRINGS.connXNotFound;
+  if (r.status === 502) return STRINGS.connXUnreachable;
+  return STRINGS.connFailed;
+}
+
+function xStartCode(rawHandle) {
+  return runConnAction(async () => {
+    const handle = String(rawHandle || "").trim();
+    if (!handle) return { text: STRINGS.connXInvalid };
+    connXHandleDraft = handle;
+    const { r, data } = await integrationPost({ action: "xStart", handle });
+    if (!r.ok) return { text: xErrorText(r, data) };
+    if (connData?.x) connData.x.pending = { handle: data.handle, code: data.code, expiresInSec: data.expiresInSec };
+    trackAppActivity("integration_x_code");
+    setAccountMessage(accountConnectionsMessage, "");
+    return null;
+  });
+}
+
+function xVerifyCode() {
+  return runConnAction(async () => {
+    const { r, data } = await integrationPost({ action: "xVerify" });
+    if (!r.ok) {
+      if (data.error === "No pending code" && connData?.x) connData.x.pending = null;
+      return { text: xErrorText(r, data) };
+    }
+    if (connData?.x) {
+      Object.assign(connData.x, {
+        linked: true, externalId: data.handle, pending: null,
+        lastCheckedAt: data.checked ? new Date().toISOString() : connData.x.lastCheckedAt,
+      });
+    }
+    connXHandleDraft = "";
+    trackAppActivity("integration_x_linked");
+    return { ok: true, text: data.lastPost || !data.checked ? STRINGS.connXDone : `${STRINGS.connXDone} ${STRINGS.connXNoPost}` };
+  });
+}
+
+function xCard() {
+  const p = connData?.x;
+  const card = connCard("x", STRINGS.connXNote);
+  if (!p) return card;
+  if (p.linked) {
+    card.appendChild(linkedLine("x", p));
+    card.appendChild(el("div", "account-note", p.lastCheckedAt
+      ? fillString(STRINGS.connXLastChecked, { when: formatAccountDate(p.lastCheckedAt, true) })
+      : STRINGS.connXNeverChecked));
+    card.appendChild(visibilitySelect("x", p.visibility));
+    const actions = el("div", "account-actions");
+    actions.appendChild(connButton(STRINGS.connUnlink, () => unlinkProvider("x"), { danger: true }));
+    card.appendChild(actions);
+    return card;
+  }
+  if (p.pending) {
+    card.appendChild(el("p", "account-note", fillString(STRINGS.connXCodeIntro, { handle: p.pending.handle })));
+    const row = el("div", "account-row");
+    const code = el("code", "account-conn-code", p.pending.code);
+    row.appendChild(code);
+    row.appendChild(connButton(STRINGS.connXCopy, async () => {
+      try {
+        await navigator.clipboard.writeText(p.pending.code);
+        setAccountMessage(accountConnectionsMessage, STRINGS.connXCopied, false, 3000);
+      } catch {
+        // Clipboard blocked: the code stays visible to copy by hand.
+      }
+    }));
+    card.appendChild(row);
+    const actions = el("div", "account-actions");
+    actions.appendChild(connButton(connBusy ? STRINGS.connXVerifying : STRINGS.connXVerify, xVerifyCode));
+    actions.appendChild(connButton(STRINGS.connXCancel, () => {
+      connXHandleDraft = p.pending.handle;
+      p.pending = null;
+      setAccountMessage(accountConnectionsMessage, "");
+      renderConnections();
+    }));
+    card.appendChild(actions);
+    return card;
+  }
+  const form = el("form", "account-conn-form");
+  form.noValidate = true;
+  const label = el("label", "account-label", STRINGS.connXHandleLabel);
+  label.htmlFor = "account-conn-x-handle";
+  const row = el("div", "account-row");
+  const input = el("input");
+  input.type = "text";
+  input.id = "account-conn-x-handle";
+  input.maxLength = 60;
+  input.autocomplete = "off";
+  input.autocapitalize = "none";
+  input.spellcheck = false;
+  input.placeholder = STRINGS.connXHandlePlaceholder;
+  input.value = connXHandleDraft;
+  input.addEventListener("input", () => { connXHandleDraft = input.value; });
+  const submit = el("button", "account-btn", STRINGS.connXGetCode);
+  submit.type = "submit";
+  submit.disabled = connBusy;
+  row.append(input, submit);
+  form.append(label, row);
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    xStartCode(input.value);
+  });
+  card.appendChild(form);
+  return card;
+}
+
+function spotifyCard() {
+  const card = connCard("spotify", STRINGS.connSpotifyNote);
+  const actions = el("div", "account-actions");
+  const go = el("button", "account-btn", STRINGS.connSpotifyGo);
+  go.type = "button";
+  go.addEventListener("click", () => {
+    const target = document.getElementById("account-conn-lastfm");
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    target?.querySelector("button, select")?.focus({ preventScroll: true });
+  });
+  actions.appendChild(go);
+  card.appendChild(actions);
+  return card;
+}
+
+function renderConnections() {
+  const focusedId = document.activeElement?.id;
+  accountConnections.innerHTML = "";
+  if (!connData) {
+    accountConnections.appendChild(el("p", "account-note", STRINGS.accountLoading));
+    return;
+  }
+  accountConnections.append(
+    oauthCard("lastfm", STRINGS.connLastfmNote),
+    oauthCard("steam", STRINGS.connSteamNote),
+    xCard(),
+    spotifyCard(),
+  );
+  if (focusedId) document.getElementById(focusedId)?.focus({ preventScroll: true });
+}
+
+/** After a provider callback: /app.html?conn=<provider>&result=<code>. */
+function readConnectionResult() {
+  const params = new URLSearchParams(location.search);
+  const provider = params.get("conn");
+  const result = params.get("result");
+  if (!provider) return null;
+  history.replaceState(null, "", location.pathname);
+  if (!["lastfm", "steam"].includes(provider)) return null;
+  const name = connProviderName(provider);
+  const texts = {
+    ok: STRINGS.connResultOk, taken: STRINGS.connTaken, denied: STRINGS.connResultDenied,
+    expired: STRINGS.connResultExpired, unavailable: STRINGS.connResultUnavailable,
+  };
+  return { ok: result === "ok", text: fillString(texts[result] || STRINGS.connResultFailed, { provider: name }) };
+}
+
+function showConnectionResult(outcome) {
+  openAccount();
+  setAccountMessage(accountConnectionsMessage, outcome.text, !outcome.ok, outcome.ok ? 8000 : 0);
+  requestAnimationFrame(() => accountConnectionsSection.scrollIntoView({ block: "start" }));
+}
+
+// ── Owner DASHBOARD ─────────────────────────────────────────────────────
+// Shown only to role "owner"; /api/owner checks the role on every request, so
+// hiding the button is cosmetic. Look: the login card (auth-card / auth-nav /
+// form-control / btn-light) over a full view like "Minha conta".
+let ownerTab = "bans";
+let ownerSeq = 0;
+let ownerBusy = false;
+let ownerBanned = [];
+let ownerReserved = [];
+let ownerLookupAccount = null;
+let ownerLookupTimer = null;
+let ownerLookupSeq = 0;
+
+function renderOwnerButton() {
+  profileOwnerBtn.hidden = myRole !== "owner";
+  if (myRole !== "owner" && !ownerView.hidden) closeOwner();
+}
+
+function setOwnerMessage(text, kind = "") {
+  ownerMessage.textContent = text || "";
+  ownerMessage.className = `mb-3 small${kind ? ` ${kind}` : ""}`;
+}
+
+async function ownerRequest(url, body) {
+  const options = { credentials: "include" };
+  if (body) {
+    options.method = "POST";
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(body);
+  }
+  const r = await authFetch(url, options);
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 403) setOwnerMessage(STRINGS.ownerForbidden, "text-danger");
+  return { r, data };
+}
+
+function banRoomsText(bans) {
+  if (!bans || (!bans.all && !bans.rooms?.length)) return STRINGS.ownerLookupNoBans;
+  return bans.all ? STRINGS.ownerAllRooms : joinList(bans.rooms);
+}
+
+function switchOwnerTab(tab) {
+  ownerTab = tab;
+  for (const [name, btn] of Object.entries(ownerTabs)) {
+    btn.classList.toggle("active", name === tab);
+    btn.setAttribute("aria-selected", String(name === tab));
+    ownerPanels[name].hidden = name !== tab;
+  }
+  setOwnerMessage("");
+  if (tab === "ban") {
+    renderOwnerBanRooms();
+    ownerBanUsername.focus();
+  }
+}
+
+async function loadOwnerBans() {
+  const seq = ownerSeq;
+  ownerBansList.innerHTML = "";
+  ownerBansList.appendChild(el("p", "form-text", STRINGS.ownerLoading));
+  const { r, data } = await ownerRequest("/api/owner?type=bans");
+  if (seq !== ownerSeq) return;
+  if (!r.ok) {
+    ownerBansList.innerHTML = "";
+    if (r.status !== 403) setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    return;
+  }
+  ownerBanned = data.accounts || [];
+  renderOwnerBans();
+}
+
+function renderOwnerBans() {
+  const term = ownerBansSearch.value.trim().replace(/^@+/, "").toLowerCase();
+  const list = ownerBanned.filter(a => !term || a.username.toLowerCase().includes(term)
+    || (a.showname || "").toLowerCase().includes(term));
+  ownerBansList.innerHTML = "";
+  if (!list.length) {
+    ownerBansList.appendChild(el("p", "form-text", ownerBanned.length ? STRINGS.ownerNoMatch : STRINGS.ownerNoBans));
+    return;
+  }
+  for (const a of list) {
+    const row = el("div", "owner-row");
+    const who = el("div", "owner-row-who");
+    who.appendChild(el("span", "owner-row-handle", `@${a.username}`));
+    if (a.showname) who.appendChild(el("span", "owner-row-name", a.showname));
+    row.appendChild(who);
+    row.appendChild(el("div", "owner-row-rooms", banRoomsText(a.bans)));
+    const actions = el("div", "account-actions");
+    if (a.canModerate) {
+      for (const room of a.bans.rooms) {
+        const btn = el("button", "account-btn", fillString(STRINGS.ownerRemoveBan, { room }));
+        btn.type = "button";
+        btn.disabled = ownerBusy;
+        btn.addEventListener("click", () => ownerUnban(a, [room]));
+        actions.appendChild(btn);
+      }
+      const all = el("button", "account-btn danger", STRINGS.ownerRemoveAll);
+      all.type = "button";
+      all.disabled = ownerBusy;
+      all.addEventListener("click", () => ownerUnban(a, ["ALL"]));
+      actions.appendChild(all);
+    }
+    row.appendChild(actions);
+    ownerBansList.appendChild(row);
+  }
+}
+
+async function ownerUnban(account, rooms) {
+  const all = rooms.includes("ALL");
+  const ok = await confirmModAction({
+    title: STRINGS.ownerUnbanTitle,
+    message: all
+      ? fillString(STRINGS.ownerUnbanAllConfirm, { user: account.username })
+      : fillString(STRINGS.ownerUnbanRoomConfirm, { user: account.username, room: rooms[0] }),
+    okLabel: STRINGS.modUnbanOk,
+  });
+  if (!ok || ownerBusy) return;
+  ownerBusy = true;
+  renderOwnerBans();
+  try {
+    const { r } = await ownerRequest("/api/owner", { action: "unban", username: account.username, rooms });
+    if (r.ok) {
+      setOwnerMessage(fillString(STRINGS.ownerUnbanned, { user: account.username }), "text-success");
+      trackAppActivity("owner_unban");
+    } else if (r.status !== 403) {
+      setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    }
+  } catch (e) {
+    console.warn("[app] owner unban:", e);
+    setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+  } finally {
+    ownerBusy = false;
+  }
+  await loadOwnerBans();
+}
+
+function renderOwnerBanRooms() {
+  const checked = new Set([...ownerBanRooms.querySelectorAll("input:checked")].map(i => i.value));
+  ownerBanRooms.innerHTML = "";
+  const names = roomNames.length ? roomNames : Object.keys(ROOM_ICONS);
+  for (const value of [...names, "ALL"]) {
+    const wrap = el("div", "form-check");
+    const input = el("input", "form-check-input");
+    input.type = "checkbox";
+    input.id = `owner-room-${value}`;
+    input.value = value;
+    input.checked = checked.has(value);
+    const label = el("label", "form-check-label", value === "ALL" ? STRINGS.ownerAllRooms : value);
+    label.htmlFor = input.id;
+    wrap.append(input, label);
+    ownerBanRooms.appendChild(wrap);
+  }
+  syncOwnerRoomChecks();
+}
+
+/** "Todas as salas" checked: the single rooms are implied, so they are disabled. */
+function syncOwnerRoomChecks() {
+  const all = ownerBanRooms.querySelector('input[value="ALL"]')?.checked;
+  for (const input of ownerBanRooms.querySelectorAll('input:not([value="ALL"])')) {
+    input.disabled = !!all;
+    if (all) input.checked = false;
+  }
+}
+
+ownerBanRooms.addEventListener("change", syncOwnerRoomChecks);
+
+function renderOwnerLookup(state) {
+  ownerBanLookup.className = "form-text owner-lookup";
+  if (!state) {
+    ownerBanLookup.textContent = "";
+    return;
+  }
+  if (state.loading) {
+    ownerBanLookup.textContent = STRINGS.ownerLoading;
+    return;
+  }
+  if (state.error) {
+    ownerBanLookup.textContent = state.error;
+    ownerBanLookup.classList.add("text-danger");
+    return;
+  }
+  const a = state.account;
+  ownerBanLookup.textContent = a.canModerate
+    ? fillString(STRINGS.ownerLookupFound, { user: a.username, bans: banRoomsText(a.bans) })
+    : fillString(STRINGS.ownerLookupProtected, { user: a.username });
+  if (!a.canModerate) ownerBanLookup.classList.add("text-danger");
+}
+
+async function ownerLookup(name) {
+  const seq = ++ownerLookupSeq;
+  ownerLookupAccount = null;
+  if (!name.replace(/^@+/, "")) {
+    renderOwnerLookup(null);
+    return;
+  }
+  renderOwnerLookup({ loading: true });
+  try {
+    const { r, data } = await ownerRequest(`/api/owner?type=lookup&username=${encodeURIComponent(name)}`);
+    if (seq !== ownerLookupSeq) return;
+    if (r.ok) {
+      ownerLookupAccount = data.account;
+      renderOwnerLookup({ account: data.account });
+    } else {
+      renderOwnerLookup({ error: r.status === 404 ? STRINGS.ownerLookupNone : STRINGS.ownerLookupFailed });
+    }
+  } catch (e) {
+    console.warn("[app] owner lookup:", e);
+    if (seq === ownerLookupSeq) renderOwnerLookup({ error: STRINGS.ownerLookupFailed });
+  }
+}
+
+ownerBanUsername.addEventListener("input", () => {
+  clearTimeout(ownerLookupTimer);
+  ownerBanResult.textContent = "";
+  const value = ownerBanUsername.value.trim();
+  ownerLookupTimer = setTimeout(() => ownerLookup(value), 300);
+});
+
+ownerPanels.ban.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (ownerBusy) return;
+  clearTimeout(ownerLookupTimer);
+  const typed = ownerBanUsername.value.trim();
+  if (!ownerLookupAccount || ownerLookupAccount.username.toLowerCase() !== typed.replace(/^@+/, "").toLowerCase()) {
+    await ownerLookup(typed);
+  }
+  const account = ownerLookupAccount;
+  if (!account) {
+    setOwnerMessage(STRINGS.ownerBanPickUser, "text-danger");
+    return;
+  }
+  if (!account.canModerate) {
+    setOwnerMessage(fillString(STRINGS.ownerLookupProtected, { user: account.username }), "text-danger");
+    return;
+  }
+  const rooms = [...ownerBanRooms.querySelectorAll("input:checked")].map(i => i.value);
+  if (!rooms.length) {
+    setOwnerMessage(STRINGS.ownerBanPickRoom, "text-danger");
+    return;
+  }
+  const ok = await confirmModAction({
+    title: STRINGS.ownerBanTitle,
+    message: fillString(STRINGS.ownerBanConfirm, {
+      user: account.username,
+      rooms: rooms.includes("ALL") ? STRINGS.ownerAllRooms : joinList(rooms),
+    }),
+    okLabel: STRINGS.modBanOk,
+  });
+  if (!ok) return;
+  ownerBusy = true;
+  ownerBanSubmit.disabled = true;
+  try {
+    const { r, data } = await ownerRequest("/api/owner", { action: "ban", username: account.username, rooms });
+    if (r.ok) {
+      ownerLookupAccount = data.account;
+      renderOwnerLookup({ account: data.account });
+      setOwnerMessage("");
+      ownerBanResult.textContent = fillString(STRINGS.ownerBanDone, { user: data.account.username, bans: banRoomsText(data.account.bans) });
+      for (const input of ownerBanRooms.querySelectorAll("input")) input.checked = false;
+      syncOwnerRoomChecks();
+      trackAppActivity("owner_ban");
+      loadOwnerBans();
+    } else if (r.status !== 403) {
+      setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    }
+  } catch (err) {
+    console.warn("[app] owner ban:", err);
+    setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+  } finally {
+    ownerBusy = false;
+    ownerBanSubmit.disabled = false;
+  }
+});
+
+async function loadOwnerReserved() {
+  const seq = ownerSeq;
+  const { r, data } = await ownerRequest("/api/owner?type=reserved");
+  if (seq !== ownerSeq || !r.ok) return;
+  ownerReserved = data.usernames || [];
+  renderOwnerReserved();
+}
+
+function renderOwnerReserved() {
+  ownerReservedList.innerHTML = "";
+  if (!ownerReserved.length) {
+    ownerReservedList.appendChild(el("p", "form-text", STRINGS.ownerNoReserved));
+    return;
+  }
+  for (const name of ownerReserved) {
+    const row = el("div", "owner-row owner-row-inline");
+    row.appendChild(el("span", "owner-row-handle", name));
+    const btn = el("button", "account-btn danger", STRINGS.ownerReserveRemove);
+    btn.type = "button";
+    btn.disabled = ownerBusy;
+    btn.addEventListener("click", () => ownerUnreserve(name));
+    row.appendChild(btn);
+    ownerReservedList.appendChild(row);
+  }
+}
+
+async function ownerUnreserve(name) {
+  if (ownerBusy) return;
+  ownerBusy = true;
+  renderOwnerReserved();
+  try {
+    const { r } = await ownerRequest("/api/owner", { action: "unreserve", username: name });
+    if (r.ok) {
+      setOwnerMessage(fillString(STRINGS.ownerReserveRemoved, { name }), "text-success");
+      trackAppActivity("owner_unreserve");
+    } else if (r.status !== 403) {
+      setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    }
+  } catch (e) {
+    console.warn("[app] owner unreserve:", e);
+    setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+  } finally {
+    ownerBusy = false;
+  }
+  await loadOwnerReserved();
+}
+
+ownerReserveForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (ownerBusy) return;
+  const name = ownerReserveInput.value.trim().replace(/^@+/, "").toLowerCase();
+  if (!/^[^\s]{5,15}$/.test(name)) {
+    setOwnerMessage(STRINGS.ownerReserveInvalid, "text-danger");
+    return;
+  }
+  ownerBusy = true;
+  ownerReserveSubmit.disabled = true;
+  try {
+    const { r, data } = await ownerRequest("/api/owner", { action: "reserve", username: name });
+    if (r.ok) {
+      ownerReserveInput.value = "";
+      setOwnerMessage(fillString(STRINGS.ownerReserveDone, { name: data.username }), "text-success");
+      trackAppActivity("owner_reserve");
+    } else if (r.status === 409) {
+      setOwnerMessage(data.error === "Username already reserved" ? STRINGS.ownerReserveDuplicate : STRINGS.ownerReserveTaken, "text-danger");
+    } else if (r.status === 400) {
+      setOwnerMessage(STRINGS.ownerReserveInvalid, "text-danger");
+    } else if (r.status !== 403) {
+      setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    }
+  } catch (err) {
+    console.warn("[app] owner reserve:", err);
+    setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+  } finally {
+    ownerBusy = false;
+    ownerReserveSubmit.disabled = false;
+  }
+  await loadOwnerReserved();
+});
+
+function openOwner() {
+  if (myRole !== "owner") return;
+  trackAppActivity("open_owner");
+  closeBubble();
+  closeReactionPopovers();
+  closeEmojiPicker();
+  closeModMenu();
+  ownerSeq++;
+  ownerView.hidden = false;
+  ownerBansSearch.value = "";
+  ownerBanUsername.value = "";
+  ownerBanResult.textContent = "";
+  ownerLookupAccount = null;
+  renderOwnerLookup(null);
+  switchOwnerTab("bans");
+  ownerClose.focus();
+  loadOwnerBans();
+  loadOwnerReserved();
+}
+
+function closeOwner() {
+  if (ownerView.hidden) return;
+  ownerSeq++;
+  ownerLookupSeq++;
+  clearTimeout(ownerLookupTimer);
+  ownerView.hidden = true;
+  profileOwnerBtn.focus();
+}
+
+profileOwnerBtn.addEventListener("click", openOwner);
+ownerClose.addEventListener("click", closeOwner);
+ownerBansSearch.addEventListener("input", renderOwnerBans);
+for (const [name, btn] of Object.entries(ownerTabs)) btn.addEventListener("click", () => switchOwnerTab(name));
+
 // Close the emoji picker / reaction bar when clicking outside them.
 document.addEventListener("click", (e) => {
   if (!dmReactBar.hidden && !dmReactBar.contains(e.target)) closeReactBar();
@@ -5522,6 +6890,12 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  if (!ownerView.hidden) {
+    e.preventDefault();
+    closeOwner();
+    return;
+  }
+
   if (!accountView.hidden) {
     e.preventDefault();
     closeAccount();
@@ -5531,6 +6905,18 @@ document.addEventListener("keydown", (e) => {
   if (contactPanelOpen) {
     e.preventDefault();
     closeContactPanel();
+    return;
+  }
+
+  if (currentRoom && roomPanelOpenMobile) {
+    e.preventDefault();
+    closeRoomPanelMobile();
+    return;
+  }
+
+  if (currentRoom && roomPanelMode === "profile") {
+    e.preventDefault();
+    showRoomInfo();
     return;
   }
 
@@ -5657,6 +7043,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!me) return;
 
   renderProfileSummary();
+  // Back from a Last.fm / Steam callback: open "Minha conta" on "Conexões".
+  const connResult = readConnectionResult();
+  if (connResult) showConnectionResult(connResult);
   fetchRoomState();
   await fetchSocial();
   fetchIncomingBadge();
