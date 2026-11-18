@@ -542,17 +542,29 @@ await ok("next_check_at: +1 h on success, +10 min on failure", () => {
 });
 await ok("provider availability follows the env vars (X needs none)", () => {
   assert.equal(integ.providerAvailable("x", {}), true);
-  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", API_KEY_SEED: "s" }), false);
-  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", LASTFM_SHARED_SECRET: "x", API_KEY_SEED: "s" }), true);
-  assert.equal(integ.providerAvailable("steam", { API_KEY_SEED: "s" }), false);
-  assert.equal(integ.providerAvailable("steam", { STEAM_API_KEY: "k", API_KEY_SEED: "s" }), true);
+  const S = { INTEGRATION_STATE_SECRET: "s" };
+  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", ...S }), false);
+  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", LASTFM_SHARED_SECRET: "x", ...S }), true);
+  assert.equal(integ.providerAvailable("steam", S), false);
+  assert.equal(integ.providerAvailable("steam", { STEAM_API_KEY: "k", ...S }), true);
   assert.equal(integ.providerAvailable("spotify", { STEAM_API_KEY: "k" }), false);
+});
+
+await ok("link flows unavailable without INTEGRATION_STATE_SECRET (X unaffected, API_KEY_SEED not used)", () => {
+  const keys = { LASTFM_API_KEY: "k", LASTFM_SHARED_SECRET: "x", STEAM_API_KEY: "k", API_KEY_SEED: "seed" };
+  for (const secret of [undefined, "", "   "]) {
+    const env = { ...keys, INTEGRATION_STATE_SECRET: secret };
+    assert.equal(integ.providerAvailable("lastfm", env), false);
+    assert.equal(integ.providerAvailable("steam", env), false);
+    assert.equal(integ.providerAvailable("x", env), true);
+  }
+  assert.throws(() => integ.stateKey(undefined), /INTEGRATION_STATE_SECRET/);
+  assert.throws(() => integ.stateKey(""), /INTEGRATION_STATE_SECRET/);
 });
 
 console.log("integrations: signed link state:");
 await ok("state: valid, expired, tampered, other user / provider", () => {
-  const key = integ.stateKey("smoke-seed");
-  assert.notDeepEqual(key, Buffer.from("smoke-seed"), "a derived key, not the seed");
+  const key = integ.stateKey("smoke-state-secret");
   const now = 1_700_000_000_000;
   const token = integ.signState(key, { userId: "U1", provider: "lastfm", nonce: "n1", now });
   assert.deepEqual(integ.verifyState(key, token, { userId: "U1", provider: "lastfm", now: now + 1000 }), { ok: true, nonce: "n1" });
@@ -563,7 +575,7 @@ await ok("state: valid, expired, tampered, other user / provider", () => {
   const forged = Buffer.from(JSON.stringify({ u: "U2", p: "lastfm", n: "n1", exp: now + 60000 })).toString("base64url");
   assert.equal(integ.verifyState(key, `${forged}.${sig}`, { userId: "U2", provider: "lastfm", now }).reason, "signature");
   assert.equal(integ.verifyState(key, `${payload}.${sig.slice(0, -2)}AA`, { userId: "U1", provider: "lastfm", now }).reason, "signature");
-  assert.equal(integ.verifyState(integ.stateKey("other-seed"), token, { userId: "U1", provider: "lastfm", now }).reason, "signature");
+  assert.equal(integ.verifyState(integ.stateKey("other-state-secret"), token, { userId: "U1", provider: "lastfm", now }).reason, "signature");
   assert.equal(integ.verifyState(key, "garbage", { userId: "U1", provider: "lastfm", now }).reason, "malformed");
 });
 
