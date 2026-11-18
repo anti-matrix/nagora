@@ -363,4 +363,149 @@ await ok("name color: too dark for the background is refused", () => {
   assert.equal(cosmetics.contrastRatio("#123456", "#123456"), 1);
 });
 
+console.log("image pipeline (client, js/b2WrIeyFDyJ13PU.js):");
+await import("../js/b2WrIeyFDyJ13PU.js");
+const NI = globalThis.NagoraImage;
+const images = await import("../lib/images.js");
+
+/** Minimal GIF89a with `frames` 1x1 frames. */
+function makeGif(frames) {
+  const bytes = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0x80, 0, 0, 0, 0, 0, 255, 255, 255];
+  bytes.push(0x21, 0xff, 0x0b, ...Buffer.from("NETSCAPE2.0"), 0x03, 0x01, 0x00, 0x00, 0x00); // loop extension
+  for (let i = 0; i < frames; i++) {
+    bytes.push(0x21, 0xf9, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00);            // graphic control
+    bytes.push(0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0x00);                         // image descriptor
+    bytes.push(0x02, 0x02, 0x4c, 0x01, 0x00);                               // LZW data
+  }
+  bytes.push(0x3b);
+  return Uint8Array.from(bytes);
+}
+
+const near = (a, b) => Math.abs(a - b) < 1e-6;
+
+await ok("scaling: longest side at most 1600, ratio kept, never enlarged", () => {
+  assert.deepEqual(NI.fitWithin(3200, 2400, 1600), { width: 1600, height: 1200 });
+  assert.deepEqual(NI.fitWithin(1200, 4000, 1600), { width: 480, height: 1600 });
+  assert.deepEqual(NI.fitWithin(1600, 1600, 1600), { width: 1600, height: 1600 });
+  assert.deepEqual(NI.fitWithin(800, 600, 1600), { width: 800, height: 600 });
+  assert.deepEqual(NI.fitWithin(1, 10000, 1600), { width: 1, height: 1600 });
+  assert.equal(NI.MAX_SIDE, 1600);
+});
+await ok("crop presets: largest centered rectangle with the preset ratio", () => {
+  const ids = NI.CROP_PRESETS.map(p => p.id);
+  assert.deepEqual(ids, ["free", "1:1", "4:3", "16:9"]);
+  for (const [W, H] of [[4000, 3000], [1000, 2000], [1920, 1080], [500, 500]]) {
+    for (const { id, aspect } of NI.CROP_PRESETS) {
+      const r = NI.initialCrop(aspect, W, H);
+      if (!aspect) {
+        assert.deepEqual(r, { x: 0, y: 0, w: W, h: H }, `${id} ${W}x${H}`);
+        continue;
+      }
+      assert.ok(near(r.w / r.h, aspect), `${id} ${W}x${H} ratio`);
+      assert.ok(r.x >= -1e-9 && r.y >= -1e-9 && r.x + r.w <= W + 1e-9 && r.y + r.h <= H + 1e-9, `${id} ${W}x${H} inside`);
+      assert.ok(near(r.w, W) || near(r.h, H), `${id} ${W}x${H} largest`);
+      assert.ok(near(r.x, (W - r.w) / 2) && near(r.y, (H - r.h) / 2), `${id} ${W}x${H} centered`);
+    }
+  }
+  assert.deepEqual(NI.initialCrop(1, 4000, 3000), { x: 500, y: 0, w: 3000, h: 3000 });
+  assert.deepEqual(NI.initialCrop(16 / 9, 4000, 3000), { x: 0, y: 375, w: 4000, h: 2250 });
+});
+await ok("crop drag: corners resize from the opposite corner, keep the ratio, stay inside", () => {
+  const W = 1000, H = 800;
+  const start = { x: 100, y: 100, w: 400, h: 400 };
+  // free: se corner grows by (50, 20)
+  assert.deepEqual(NI.resizeCrop(start, "se", 50, 20, null, W, H, 32), { x: 100, y: 100, w: 450, h: 420 });
+  // free: nw corner dragged past the image edge is clamped at 0
+  assert.deepEqual(NI.resizeCrop(start, "nw", -500, -500, null, W, H, 32), { x: 0, y: 0, w: 500, h: 500 });
+  // locked aspect, for every preset and corner, huge and tiny drags
+  for (const { aspect } of NI.CROP_PRESETS.filter(p => p.aspect)) {
+    for (const corner of ["nw", "ne", "sw", "se"]) {
+      for (const [dx, dy] of [[5000, 5000], [-5000, -5000], [37, -12], [-390, -390], [390, 390]]) {
+        const r = NI.resizeCrop(start, corner, dx, dy, aspect, W, H, 32);
+        assert.ok(near(r.w / r.h, aspect), `${aspect} ${corner} ${dx},${dy} ratio`);
+        assert.ok(r.x >= -1e-9 && r.y >= -1e-9 && r.x + r.w <= W + 1e-9 && r.y + r.h <= H + 1e-9, `${aspect} ${corner} ${dx},${dy} inside`);
+        assert.ok(r.w >= 32 - 1e-9 && r.h >= 32 - 1e-9, `${aspect} ${corner} ${dx},${dy} min`);
+      }
+    }
+  }
+  // the anchor (opposite corner) does not move
+  const r = NI.resizeCrop(start, "nw", 30, 30, 1, W, H, 32);
+  assert.ok(near(r.x + r.w, 500) && near(r.y + r.h, 500));
+  // minimum size when dragged through the anchor
+  assert.deepEqual(NI.resizeCrop(start, "se", -1000, -1000, null, W, H, 32), { x: 100, y: 100, w: 32, h: 32 });
+});
+await ok("crop move and rounding stay inside the image", () => {
+  const W = 1000, H = 800;
+  assert.deepEqual(NI.moveCrop({ x: 100, y: 100, w: 400, h: 300 }, 9999, -9999, W, H), { x: 600, y: 0, w: 400, h: 300 });
+  assert.deepEqual(NI.moveCrop({ x: 100, y: 100, w: 400, h: 300 }, 10, 20, W, H), { x: 110, y: 120, w: 400, h: 300 });
+  const r = NI.roundCrop({ x: 999.6, y: -0.4, w: 10.7, h: 900 }, W, H);
+  assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= H && r.w >= 1 && r.h >= 1, JSON.stringify(r));
+  assert.deepEqual(NI.roundCrop({ x: 10.4, y: 20.6, w: 100.5, h: 50.2 }, W, H), { x: 10, y: 21, w: 101, h: 50 });
+});
+await ok("size caps: 15 MB input, 1 MB output, same 1 MB cap on the server", () => {
+  const MB = 1024 * 1024;
+  assert.equal(NI.inputProblem({ type: "image/png", size: 15 * MB }), null);
+  assert.equal(NI.inputProblem({ type: "image/jpeg", size: 15 * MB + 1 }), "size");
+  assert.equal(NI.inputProblem({ type: "image/jpeg", size: 20 * MB }), "size");
+  assert.equal(NI.inputProblem({ type: "image/png", size: 0 }), "size");
+  assert.equal(NI.inputProblem({ type: "application/pdf", size: 1000 }), "type");
+  assert.equal(NI.inputProblem({ type: "", size: 1000 }), "type");
+  assert.equal(NI.inputProblem(null), "type");
+  assert.equal(NI.outputProblem(MB), null);
+  assert.equal(NI.outputProblem(MB + 1), "size");
+  assert.equal(NI.outputProblem(0), "size");
+  assert.equal(NI.MAX_OUTPUT_BYTES, images.MAX_IMAGE_BYTES);
+  assert.equal(images.imageSizeProblem(MB), null);
+  assert.equal(images.imageSizeProblem(MB + 1), "Image file is too large");
+  assert.equal(images.imageSizeProblem(0), "Invalid image file");
+  assert.throws(() => images.decodeImageBase64(Buffer.alloc(MB + 1).toString("base64")), /too large/);
+  assert.equal(images.decodeImageBase64(Buffer.alloc(MB, 1).toString("base64")).length, MB);
+  assert.throws(() => images.decodeImageBase64(""), /required/);
+  assert.deepEqual(NI.QUALITY_STEPS, [0.82, 0.72, 0.6]);
+  assert.equal(NI.kilobytes(1), 1);
+  assert.equal(NI.kilobytes(250 * 1024), 250);
+});
+await ok("GIF bypass: only animated GIFs skip scaling and cropping", async () => {
+  const still = makeGif(1);
+  const animated = makeGif(3);
+  assert.equal(NI.gifFrameCount(still), 1);
+  assert.equal(NI.gifFrameCount(animated), 2); // stops counting at 2
+  assert.equal(NI.gifFrameCount(animated, 10), 3);
+  assert.equal(NI.gifFrameCount(Uint8Array.from([0x89, 0x50, 0x4e, 0x47])), 0);
+  assert.equal(NI.gifFrameCount(still.slice(0, 20)), 0); // truncated
+  assert.equal(NI.bypassesProcessing("image/gif", 2), true);
+  assert.equal(NI.bypassesProcessing("image/gif", 1), false);
+  assert.equal(NI.bypassesProcessing("image/png", 5), false);
+  // sharp reads the same frame counts from the same bytes
+  const sharp = (await import("sharp")).default;
+  assert.equal((await sharp(Buffer.from(still)).metadata()).pages || 1, 1);
+  assert.equal((await sharp(Buffer.from(animated)).metadata()).pages, 3);
+});
+
+console.log("image re-encode (server, lib/images.js):");
+await ok("re-encode: WebP, metadata stripped, client MIME ignored, SVG refused", async () => {
+  const sharp = (await import("sharp")).default;
+  const jpeg = await sharp({ create: { width: 2400, height: 1200, channels: 3, background: "#c33" } })
+    .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+  const out = await images.processMessageImage(jpeg);
+  assert.equal(out.mediaType, "image/webp");
+  assert.deepEqual([out.width, out.height], [800, 1600]); // EXIF rotation applied, then fit to 1600
+  const meta = await sharp(out.bytes).metadata();
+  assert.equal(meta.format, "webp");
+  assert.ok(!meta.exif && !meta.orientation && !meta.xmp && !meta.icc, "no metadata left");
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>');
+  await assert.rejects(images.processMessageImage(svg), /Unsupported image format/);
+  await assert.rejects(images.processMessageImage(Buffer.from("not an image")), /Invalid image file/);
+  // Three different frames (identical ones would be merged by the WebP encoder).
+  const raw = Buffer.concat(await Promise.all(["#f00", "#0f0", "#00f"].map(c =>
+    sharp({ create: { width: 8, height: 8, channels: 3, background: c } }).raw().toBuffer())));
+  const gif = await sharp(raw, { raw: { width: 8, height: 24, channels: 3, pageHeight: 8 } }).gif({ delay: [100, 100, 100] }).toBuffer();
+  assert.equal(NI.gifFrameCount(new Uint8Array(gif), 10), 3, "client parser agrees with an encoder-made GIF");
+  const anim = await images.processMessageImage(gif);
+  assert.equal((await sharp(anim.bytes, { animated: true }).metadata()).pages, 3, "animation kept");
+  assert.deepEqual([anim.width, anim.height], [8, 8], "frame size, not the frame strip");
+  const avatar = await sharp(await images.processAvatarImage(jpeg)).metadata();
+  assert.deepEqual([avatar.format, avatar.width, avatar.height], ["webp", 128, 128]);
+});
+
 console.log(`\nAll ${passed} tests passed.`);
