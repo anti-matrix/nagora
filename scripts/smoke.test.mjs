@@ -519,6 +519,30 @@ await ok("no privacy setting: no visibility rules are exported", () => {
   assert.equal(integ.normalizeVisibility, undefined);
   assert.equal(integ.VISIBILITIES, undefined);
 });
+await ok("room feed order: live first, then the newest activity, then username", () => {
+  const at = (iso) => ({ x: { post: { createdAt: iso } } });
+  const members = [
+    { username: "b", activity: at("2026-01-01T00:00:00Z") },
+    { username: "a", activity: at("2026-01-01T00:00:00Z") },
+    { username: "new", activity: { lastfm: { track: { nowPlaying: false, playedAt: "2026-05-01T00:00:00Z" } } } },
+    { username: "gaming", activity: { steam: { player: { game: { name: "G" } } } } },
+    { username: "listening", activity: { lastfm: { track: { nowPlaying: true, playedAt: null } } } },
+    { username: "undated", activity: { steam: { player: { game: null } } } },
+  ];
+  const order = integ.sortFeed(members).map(m => m.username);
+  assert.deepEqual(order, ["gaming", "listening", "new", "a", "b", "undated"]);
+  assert.equal(members[0].username, "b"); // input untouched
+  assert.deepEqual(integ.feedSortKey(null), { live: false, at: 0 });
+  assert.deepEqual(integ.feedSortKey({ x: { post: { createdAt: "garbage" } } }), { live: false, at: 0 });
+});
+await ok("room feed: only accounts with something to show", () => {
+  assert.equal(integ.hasActivity({}), false);
+  assert.equal(integ.hasActivity({ x: { handle: "a", post: null } }), false);
+  assert.equal(integ.hasActivity({ x: { post: { id: "1" } } }), true);
+  assert.equal(integ.hasActivity({ lastfm: { unavailable: true } }), true);
+  assert.equal(integ.hasActivity({ steam: { player: {} } }), true);
+  assert.equal(integ.ROOM_FEED_LIMIT, 50);
+});
 await ok("cache TTL: Last.fm 30 s, Steam 60 s, freshness by age", () => {
   assert.equal(integ.cacheTtlMs("lastfm"), 30000);
   assert.equal(integ.cacheTtlMs("steam"), 60000);

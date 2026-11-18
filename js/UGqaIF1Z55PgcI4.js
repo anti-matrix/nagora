@@ -190,8 +190,8 @@
                     <div class="contact-panel-avatar room-panel-icon" id="room-panel-icon" aria-hidden="true"></div>
                     <div class="contact-panel-name" id="room-panel-name"></div>
                     <p class="room-panel-description" id="room-panel-description"></p>
-                    <h5 class="room-panel-heading" data-str="roomPanelRecent"></h5>
-                    <div class="room-panel-posters" id="room-panel-posters"></div>
+                    <h5 class="room-panel-heading" data-str="roomPanelActivity"></h5>
+                    <div class="room-panel-feed" id="room-panel-feed"></div>
                 </div>
                 <div class="room-panel-section" id="room-panel-profile" hidden>
                     <div class="contact-panel-avatar" id="room-profile-avatar"><i class="bi bi-person-circle"></i></div>
@@ -734,8 +734,8 @@ const STRINGS = {
   roomPanelLabel: "Informações da sala",
   roomPanelBack: "Voltar para a sala",
   roomPanelClose: "Fechar",
-  roomPanelRecent: "Postaram recentemente",
-  roomPanelNoRecent: "Ninguém postou nas últimas 24 horas.",
+  roomPanelActivity: "Atividade",
+  roomPanelNoActivity: "Ninguém aqui conectou Last.fm, Steam ou X ainda.",
   roomPanelLoadFailed: "Não foi possível carregar.",
   roomPanelOpen: "Abrir informações da sala",
 
@@ -1047,7 +1047,7 @@ const roomPanelInfo = document.getElementById("room-panel-info");
 const roomPanelIcon = document.getElementById("room-panel-icon");
 const roomPanelName = document.getElementById("room-panel-name");
 const roomPanelDescription = document.getElementById("room-panel-description");
-const roomPanelPosters = document.getElementById("room-panel-posters");
+const roomPanelFeed = document.getElementById("room-panel-feed");
 const roomPanelProfile = document.getElementById("room-panel-profile");
 const roomProfileAvatar = document.getElementById("room-profile-avatar");
 const roomProfileName = document.getElementById("room-profile-name");
@@ -4535,6 +4535,7 @@ function leaveRoom() {
   clearReply();
   dmPanel.classList.remove("room-mode");
   roomPanelOpenMobile = false;
+  stopRoomFeed();
   showRoomInfo(); // also hides the rooms sidebar (no room)
   renderRooms();
 }
@@ -4565,7 +4566,7 @@ async function openRoom(name) {
   roomPanelOpenMobile = false;
   showRoomInfo();
   renderRoomInfoHeader(name);
-  roomPanelPosters.innerHTML = "";
+  roomPanelFeed.innerHTML = "";
 
   dmPlaceholder.hidden = true;
   dmPanel.hidden = false;
@@ -5970,6 +5971,8 @@ let roomDescriptionsMap = {};
 let roomPanelMode = "info";   // "info" | "profile"
 let roomPanelOpenMobile = false;
 let roomInfoSeq = 0;
+let roomFeedSeq = 0;
+let roomFeedTimer = null;
 
 function isMobileLayout() {
   return window.innerWidth <= MOBILE_MAX_WIDTH;
@@ -6028,39 +6031,78 @@ async function loadRoomInfo() {
   const room = currentRoom;
   const seq = ++roomInfoSeq;
   renderRoomInfoHeader(room);
-  roomPanelPosters.innerHTML = "";
-  roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.bubbleLoading));
+  roomPanelFeed.innerHTML = "";
+  roomPanelFeed.appendChild(el("div", "room-panel-note", STRINGS.bubbleLoading));
+  startRoomFeed();
   try {
     const { r, data, banned } = await roomRequest(`/api/rooms?type=info&room=${encodeURIComponent(room)}`);
     if (seq !== roomInfoSeq || room !== currentRoom || banned) return;
     if (!r.ok) throw new Error(`room info ${r.status}`);
     if (data.description) roomDescriptionsMap[room] = data.description;
     renderRoomInfoHeader(room);
-    renderRoomPosters(data.recentPosters || []);
   } catch (e) {
+    // The header keeps the description from the room list.
     console.warn("[app] room info:", e);
-    if (seq !== roomInfoSeq) return;
-    roomPanelPosters.innerHTML = "";
-    roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.roomPanelLoadFailed));
   }
 }
 
-function renderRoomPosters(posters) {
-  roomPanelPosters.innerHTML = "";
-  if (!posters.length) {
-    roomPanelPosters.appendChild(el("div", "room-panel-note", STRINGS.roomPanelNoRecent));
+// ── Rooms sidebar: activity feed ────────────────────────────────────────
+// The integrations of every account not banned from the room (the server
+// filters), live first. Refreshed every 30 s while the room info is visible.
+
+function startRoomFeed() {
+  stopRoomFeed();
+  roomFeedTimer = setInterval(() => {
+    if (document.visibilityState === "visible" && roomPanelMode === "info" && !roomPanel.hidden) loadRoomFeed();
+  }, INTEGRATION_REFRESH_MS);
+  loadRoomFeed({ initial: true });
+}
+
+function stopRoomFeed() {
+  clearInterval(roomFeedTimer);
+  roomFeedTimer = null;
+  roomFeedSeq++;
+}
+
+async function loadRoomFeed({ initial = false } = {}) {
+  if (!currentRoom || roomBanned) return;
+  const room = currentRoom;
+  const seq = ++roomFeedSeq;
+  try {
+    const { r, data, banned } = await roomRequest(`/api/integrations?type=room&room=${encodeURIComponent(room)}`);
+    if (seq !== roomFeedSeq || room !== currentRoom || banned) return;
+    if (!r.ok) throw new Error(`room feed ${r.status}`);
+    renderRoomFeed(Array.isArray(data.members) ? data.members : []);
+  } catch (e) {
+    console.warn("[app] room feed:", e);
+    // A failed refresh keeps what is on screen.
+    if (!initial || seq !== roomFeedSeq) return;
+    roomPanelFeed.innerHTML = "";
+    roomPanelFeed.appendChild(el("div", "room-panel-note", STRINGS.roomPanelLoadFailed));
+  }
+}
+
+function renderRoomFeed(members) {
+  roomPanelFeed.innerHTML = "";
+  if (!members.length) {
+    roomPanelFeed.appendChild(el("div", "room-panel-note", STRINGS.roomPanelNoActivity));
     return;
   }
-  for (const p of posters) {
+  for (const m of members) {
+    const group = el("div", "room-feed-member");
     const row = el("button", "user-row room-panel-poster");
     row.type = "button";
     const avatar = el("span", "user-row-avatar");
-    setAvatarOrFallback(avatar, p.userId, p.hasAvatar, "");
-    const name = el("span", "username", displayName(p));
-    applyNameColor(name, nameColorOf(p.userId, p.nameColor));
-    row.append(avatar, name, el("span", "room-panel-ago", agoText(p.lastPostAt)));
-    row.addEventListener("click", () => openRoomProfile(p));
-    roomPanelPosters.appendChild(row);
+    setAvatarOrFallback(avatar, m.userId, m.hasAvatar, "");
+    const name = el("span", "username", displayName(m));
+    applyNameColor(name, nameColorOf(m.userId, m.nameColor));
+    row.append(avatar, name);
+    const user = { userId: m.userId, username: m.username, showname: m.showname, hasAvatar: m.hasAvatar, nameColor: m.nameColor };
+    row.addEventListener("click", () => openRoomProfile(user));
+    const cards = el("div", "integrations room-feed-cards");
+    renderIntegrations(cards, m.activity);
+    group.append(row, cards);
+    roomPanelFeed.appendChild(group);
   }
 }
 

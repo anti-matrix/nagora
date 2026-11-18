@@ -3236,10 +3236,22 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.room-panel-posters {
+.room-panel-feed {
   align-self: stretch;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+.room-feed-member {
+  display: flex;
+  flex-direction: column;
+}
+.room-feed-member .room-panel-poster {
+  padding-left: 0;
+  padding-right: 0;
+}
+.room-feed-cards {
+  margin-top: 8px;
 }
 .room-panel-poster {
   width: 100%;
@@ -3253,12 +3265,6 @@ body {
 .room-panel-poster:focus-visible {
   outline: 1px solid #888;
   outline-offset: -1px;
-}
-.room-panel-ago {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: #888;
-  font-size: 0.75rem;
 }
 .room-panel-note {
   padding: 8px 0;
