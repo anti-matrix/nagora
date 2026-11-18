@@ -6,16 +6,20 @@ import fileHandler from "../lib/handlers/file.js";
 import friendsHandler from "../lib/handlers/friends.js";
 import geoHandler from "../lib/handlers/geo.js";
 import handshakeHandler from "../lib/handlers/handshake.js";
+import integrationsHandler from "../lib/handlers/integrations.js";
 import ingestHandler from "../lib/handlers/ingest.js";
+import lastfmCallbackHandler from "../lib/handlers/lastfm-callback.js";
 import logoutHandler from "../lib/handlers/logout.js";
 import logsHandler from "../lib/handlers/logs.js";
 import meHandler from "../lib/handlers/me.js";
 import mediaHandler from "../lib/handlers/media.js";
 import messagesHandler from "../lib/handlers/messages.js";
+import ownerHandler from "../lib/handlers/owner.js";
 import presenceHandler from "../lib/handlers/presence.js";
 import recoverHandler from "../lib/handlers/recover.js";
 import roomsHandler from "../lib/handlers/rooms.js";
 import shellHandler from "../lib/handlers/shell.js";
+import steamCallbackHandler from "../lib/handlers/steam-callback.js";
 import typingHandler from "../lib/handlers/typing.js";
 import unreadHandler from "../lib/handlers/unread.js";
 import usersHandler from "../lib/handlers/users.js";
@@ -29,16 +33,20 @@ const handlers = {
   friends: friendsHandler,
   geo: geoHandler,
   handshake: handshakeHandler,
+  integrations: integrationsHandler,
   ingest: ingestHandler,
+  "lastfm-callback": lastfmCallbackHandler,
   logout: logoutHandler,
   logs: logsHandler,
   me: meHandler,
   media: mediaHandler,
   messages: messagesHandler,
+  owner: ownerHandler,
   presence: presenceHandler,
   recover: recoverHandler,
   rooms: roomsHandler,
   shell: shellHandler,
+  "steam-callback": steamCallbackHandler,
   typing: typingHandler,
   unread: unreadHandler,
   users: usersHandler,
