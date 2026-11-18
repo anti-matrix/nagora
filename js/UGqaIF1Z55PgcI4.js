@@ -75,7 +75,7 @@
                 <div class="dm-messages" id="dm-messages" tabindex="-1"></div>
                 <div class="dm-upload-status" id="dm-upload-status" hidden></div>
                 <div class="dm-composer">
-                    <input type="file" id="dm-image-input" accept="image/*" hidden />
+                    <input type="file" id="dm-image-input" accept="image/*" multiple hidden />
                     <input type="file" id="dm-audio-input" accept="audio/*" hidden />
                     <input type="file" id="dm-video-input" accept="video/*" hidden />
                     <div class="dm-attach-wrap">
@@ -98,6 +98,35 @@
                 <i class="bi bi-slash-circle room-ban-icon" aria-hidden="true"></i>
                 <h3 id="room-ban-title"></h3>
                 <p id="room-ban-message"></p>
+            </div>
+            <div class="logout-confirm-overlay img-preview-overlay" id="img-preview-overlay" hidden></div>
+            <div class="logout-confirm img-preview" id="img-preview" role="dialog" aria-modal="true" aria-labelledby="img-preview-title" aria-describedby="img-preview-info" hidden>
+                <h3 id="img-preview-title"></h3>
+                <div class="img-preview-stage" id="img-preview-stage">
+                    <img id="img-preview-img" alt="" />
+                    <div class="img-crop" id="img-crop" hidden>
+                        <canvas id="img-crop-canvas" aria-hidden="true"></canvas>
+                        <div class="img-crop-box" id="img-crop-box" role="group" data-str-label="imgCropArea">
+                            <span class="img-crop-handle nw" data-corner="nw"></span>
+                            <span class="img-crop-handle ne" data-corner="ne"></span>
+                            <span class="img-crop-handle sw" data-corner="sw"></span>
+                            <span class="img-crop-handle se" data-corner="se"></span>
+                        </div>
+                    </div>
+                </div>
+                <p id="img-preview-info"></p>
+                <div class="img-crop-presets" id="img-crop-presets" role="group" data-str-label="imgCropRatio" hidden></div>
+                <p class="img-preview-error" id="img-preview-error" role="alert"></p>
+                <div class="logout-confirm-actions" id="img-preview-actions">
+                    <button type="button" class="logout-confirm-cancel" id="img-preview-crop"><i class="bi bi-crop" aria-hidden="true"></i> <span data-str="imgCrop"></span></button>
+                    <button type="button" class="logout-confirm-cancel" id="img-preview-cancel" data-str="imgCancel"></button>
+                    <button type="button" class="logout-confirm-ok img-preview-primary" id="img-preview-send"></button>
+                </div>
+                <div class="logout-confirm-actions" id="img-crop-actions" hidden>
+                    <button type="button" class="logout-confirm-cancel" id="img-crop-reset" data-str="imgReset"></button>
+                    <button type="button" class="logout-confirm-cancel" id="img-crop-cancel" data-str="imgCancel"></button>
+                    <button type="button" class="logout-confirm-ok img-preview-primary" id="img-crop-apply" data-str="imgApply"></button>
+                </div>
             </div>
         </main>
         <aside class="contact-panel" id="contact-panel" hidden aria-label="Informações do contato">
@@ -521,6 +550,32 @@ const STRINGS = {
   bubbleFriendsFailed: "Não foi possível carregar seus amigos.",
   bubbleRetry: "Tentar novamente",
   bubbleLoading: "Carregando…",
+
+  // Image preview popup (DMs, rooms, avatar)
+  imgTitle: "Enviar imagem",
+  imgTitleQueue: "Enviar imagem ({n} de {total})",
+  imgAvatarTitle: "Foto de perfil",
+  imgInfo: "{kb} KB · {w} × {h}",
+  imgInfoGif: "GIF animado · {kb} KB",
+  imgCrop: "Recortar",
+  imgCancel: "Cancelar",
+  imgSend: "Enviar",
+  imgSave: "Salvar",
+  imgSending: "Enviando… {p}%",
+  imgApply: "Aplicar",
+  imgReset: "Redefinir",
+  imgCropFree: "Livre",
+  imgCropArea: "Área de recorte",
+  imgCropRatio: "Proporção do recorte",
+  imgProcessing: "Processando imagem…",
+  imgNotImage: "Apenas imagens são permitidas.",
+  imgTooBig: "Imagem muito grande (máx. 15 MB).",
+  imgGifTooBig: "GIF muito grande (máx. 1 MB).",
+  imgDecodeFailed: "Não foi possível abrir esta imagem.",
+  imgCompressFailed: "Não foi possível comprimir a imagem para menos de 1 MB.",
+  imgServerTooBig: "A imagem passou do limite de 1 MB.",
+  imgUnsupported: "Formato de imagem não suportado.",
+  imgSendFailed: "Falha ao enviar a imagem. Tente novamente.",
 };
 
 const ROOM_POLL_MS = 2000;
@@ -660,6 +715,10 @@ function fileUrl(messageId) {
   return `/api/file?id=${encodeURIComponent(messageId)}`;
 }
 
+function roomImageUrl(messageId) {
+  return `/api/rooms?type=image&id=${encodeURIComponent(messageId)}`;
+}
+
 const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
 const dmPanel = document.getElementById("dm-panel");
@@ -741,6 +800,26 @@ const modConfirmTitle = document.getElementById("mod-confirm-title");
 const modConfirmMessage = document.getElementById("mod-confirm-message");
 const modConfirmCancel = document.getElementById("mod-confirm-cancel");
 const modConfirmOk = document.getElementById("mod-confirm-ok");
+
+const imgPreviewOverlay = document.getElementById("img-preview-overlay");
+const imgPreview = document.getElementById("img-preview");
+const imgPreviewTitle = document.getElementById("img-preview-title");
+const imgPreviewStage = document.getElementById("img-preview-stage");
+const imgPreviewImg = document.getElementById("img-preview-img");
+const imgCropWrap = document.getElementById("img-crop");
+const imgCropCanvas = document.getElementById("img-crop-canvas");
+const imgCropBox = document.getElementById("img-crop-box");
+const imgPreviewInfo = document.getElementById("img-preview-info");
+const imgCropPresets = document.getElementById("img-crop-presets");
+const imgPreviewError = document.getElementById("img-preview-error");
+const imgPreviewActions = document.getElementById("img-preview-actions");
+const imgPreviewCrop = document.getElementById("img-preview-crop");
+const imgPreviewCancel = document.getElementById("img-preview-cancel");
+const imgPreviewSend = document.getElementById("img-preview-send");
+const imgCropActions = document.getElementById("img-crop-actions");
+const imgCropReset = document.getElementById("img-crop-reset");
+const imgCropCancel = document.getElementById("img-crop-cancel");
+const imgCropApply = document.getElementById("img-crop-apply");
 
 const profileAccountBtn = document.getElementById("profile-account-btn");
 const accountView = document.getElementById("account-view");
@@ -1257,6 +1336,7 @@ function setInitialLoading(show) {
 async function selectUser(user) {
   if (!user) return;
   trackAppActivity("open_conversation");
+  if (imgTarget && imgTarget.kind !== "avatar") closeImagePreview({ all: true });
   closeBubble();
   closeReactBar();
   closeEmojiPicker();
@@ -1398,7 +1478,7 @@ function jumpToMessage(id) {
   setTimeout(() => target.classList.remove("dm-bubble-highlight"), 1500);
 }
 
-function createImageBubble(messageId) {
+function createImageBubble(url) {
   const wrap = document.createElement("div");
   wrap.className = "dm-media-wrap";
 
@@ -1423,7 +1503,7 @@ function createImageBubble(messageId) {
 
   img.addEventListener("load", reveal);
   img.addEventListener("error", onError);
-  setAuthedSrc(img, fileUrl(messageId), { lazy: true });
+  setAuthedSrc(img, url, { lazy: true });
 
   wrap.appendChild(spinner);
   wrap.appendChild(error);
@@ -2182,7 +2262,7 @@ function renderMessages(options = {}) {
       } else if (m.mediaType.startsWith("video/")) {
         bubble.appendChild(createVideoBubble(m));
       } else {
-        bubble.appendChild(createImageBubble(m.id));
+        bubble.appendChild(createImageBubble(fileUrl(m.id)));
       }
     }
 
@@ -2403,10 +2483,16 @@ async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
   await pollConversation();
 }
 
+/** Lightbox items { id, url } of the open conversation (DM or room). */
 function imageMessages() {
+  if (currentRoom) {
+    return roomMessages
+      .filter(m => !m.deleted && m.mediaType?.startsWith("image/"))
+      .map(m => ({ id: m.id, url: roomImageUrl(m.id) }));
+  }
   return messageList
     .filter(m => m.mediaType?.startsWith("image/"))
-    .map(m => ({ id: m.id, createdAt: m.createdAt }));
+    .map(m => ({ id: m.id, url: fileUrl(m.id) }));
 }
 
 function currentLightboxImages() {
@@ -2419,7 +2505,7 @@ function openLightbox(messageId, sourceList = null) {
   if (idx === -1) return;
   lightboxImageSource = sourceList;
   lightboxImageIndex = idx;
-  setAuthedSrc(dmLightboxImg, fileUrl(messageId));
+  setAuthedSrc(dmLightboxImg, images[idx].url);
   dmLightbox.hidden = false;
   renderLightboxNav();
   renderLightboxThumbs();
@@ -2440,7 +2526,7 @@ function showLightboxImage(delta) {
   const newIdx = lightboxImageIndex + delta;
   if (newIdx < 0 || newIdx >= images.length) return;
   lightboxImageIndex = newIdx;
-  setAuthedSrc(dmLightboxImg, fileUrl(images[newIdx].id));
+  setAuthedSrc(dmLightboxImg, images[newIdx].url);
   renderLightboxNav();
   renderLightboxThumbs();
 }
@@ -2464,13 +2550,13 @@ function renderLightboxThumbs() {
     btn.type = "button";
     btn.className = "dm-lightbox-thumb" + (actualIdx === lightboxImageIndex ? " active" : "");
     const thumbImg = document.createElement("img");
-    setAuthedSrc(thumbImg, fileUrl(img.id), { lazy: true });
+    setAuthedSrc(thumbImg, img.url, { lazy: true });
     thumbImg.alt = "";
     btn.appendChild(thumbImg);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       lightboxImageIndex = actualIdx;
-      setAuthedSrc(dmLightboxImg, fileUrl(img.id));
+      setAuthedSrc(dmLightboxImg, img.url);
       renderLightboxNav();
       renderLightboxThumbs();
     });
@@ -2506,84 +2592,523 @@ function measureAudioDuration(file) {
   });
 }
 
-function downscaleImage(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const max = 1600;
-      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-      const w = Math.round(img.naturalWidth * scale);
-      const h = Math.round(img.naturalHeight * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      const base64 = dataUrl.split(",")[1];
-      resolve(base64);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("image load failed"));
-    };
-    img.src = url;
-  });
-}
-
-function downscaleAvatar(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const size = 128;
-      const scale = size / Math.max(img.naturalWidth, img.naturalHeight);
-      const w = Math.round(img.naturalWidth * scale);
-      const h = Math.round(img.naturalHeight * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, size, size);
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      resolve(dataUrl.split(",")[1]);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("image load failed"));
-    };
-    img.src = url;
-  });
-}
-
 function openAvatarPicker() {
   profileAvatarInput.click();
 }
 
-async function uploadImageBase64(imageBase64) {
-  const r = await authFetch("/api/file", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      recipientUserId: selectedUser.userId,
-      imageBase64,
-      replyToId: replyingTo?.id,
-    }),
-  });
-  if (!r.ok) {
-    const data = await r.json().catch(() => ({}));
-    throw new Error(data.error || "upload failed");
-  }
-  clearReply();
-  trackAppActivity("send_media");
-  await pollConversation();
+// ── Image send pipeline: preview popup, queue, crop ─────────────────────
+// Every image (DM, room, avatar) goes through here: validated, decoded and
+// compressed by js/b2WrIeyFDyJ13PU.js (NagoraImage), shown in #img-preview
+// with its final size, and sent only after "Enviar" / "Salvar". Pasted,
+// picked or dropped images queue and are shown one at a time.
+const NI = window.NagoraImage;
+
+let imgQueue = [];      // Files waiting for the popup
+let imgTotal = 0;       // size of the current batch, for "1 de 3"
+let imgDone = 0;        // how many of the batch were sent or cancelled
+let imgTarget = null;   // { kind: "dm", recipient } | { kind: "room", room, epoch } | { kind: "avatar" }
+let imgItem = null;     // { file, decoded, crop, result, gif, url }
+let imgBusy = false;    // a send is in flight
+let imgSeq = 0;         // bumped whenever the popup closes; stale async work checks it
+let imgCrop = null;     // crop mode: { rect, aspect, scale, drag }
+
+function imageInputMessage(problem) {
+  return problem === "size" ? STRINGS.imgTooBig : STRINGS.imgNotImage;
 }
+
+/** Where an image picked now would go: the open room, the open DM, or nowhere. */
+function currentImageTarget() {
+  if (currentRoom && !roomBanned) return { kind: "room", room: currentRoom, epoch: roomEpoch };
+  if (selectedUser) return { kind: "dm", recipient: selectedUser };
+  return null;
+}
+
+function showImageInputError(target, message) {
+  if (target?.kind === "avatar") showProfileMessage(message);
+  else showImageError(message);
+}
+
+/** Validates and queues files for `target`; opens the popup if it is closed. */
+function queueImages(files, target) {
+  if (!target || !files.length) return;
+  if (imgTarget && (target.kind === "avatar" || imgTarget.kind === "avatar" || !sameImageTarget(imgTarget, target))) {
+    closeImagePreview({ all: true });
+  }
+  let firstError = null;
+  const accepted = [];
+  for (const file of files) {
+    const problem = NI.inputProblem(file);
+    if (problem) firstError = firstError || imageInputMessage(problem);
+    else accepted.push(file);
+  }
+  if (firstError) showImageInputError(target, firstError);
+  if (!accepted.length) return;
+  trackAppActivity("pick_image");
+  if (!imgTarget) {
+    imgTarget = target;
+    imgTotal = 0;
+    imgDone = 0;
+  }
+  imgQueue.push(...accepted);
+  imgTotal += accepted.length;
+  if (!imgItem) showNextImage();
+}
+
+function sameImageTarget(a, b) {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "dm") return a.recipient.userId === b.recipient.userId;
+  if (a.kind === "room") return a.room === b.room && a.epoch === b.epoch;
+  return true;
+}
+
+/** Decodes + compresses the next queued file, then shows it. */
+async function showNextImage() {
+  const file = imgQueue.shift();
+  if (!file) {
+    closeImagePreview({ all: true });
+    return;
+  }
+  const seq = imgSeq;
+  const target = imgTarget;
+  if (target.kind !== "avatar") setUploadStatus(STRINGS.imgProcessing);
+  let item;
+  try {
+    item = await prepareImageItem(file, target);
+  } catch (e) {
+    console.warn("[app] image processing:", e);
+    if (seq !== imgSeq) return;
+    if (target.kind !== "avatar") setUploadStatus("");
+    imgDone++;
+    showImageInputError(target, e.message === "too-large" ? STRINGS.imgCompressFailed
+      : e.message === "gif-too-large" ? STRINGS.imgGifTooBig : STRINGS.imgDecodeFailed);
+    showNextImage();
+    return;
+  }
+  if (target.kind !== "avatar") setUploadStatus("");
+  if (seq !== imgSeq) {
+    releaseImageItem(item);
+    return;
+  }
+  imgItem = item;
+  openImagePreview();
+}
+
+async function prepareImageItem(file, target) {
+  const avatar = target.kind === "avatar";
+  if (!avatar && file.type === "image/gif" && NI.bypassesProcessing(file.type, await NI.isAnimatedGif(file) ? 2 : 1)) {
+    // Animated GIF: sent as it is (the server keeps the animation), no crop.
+    if (NI.outputProblem(file.size)) throw new Error("gif-too-large");
+    return { file, gif: true, decoded: null, crop: null, result: { blob: file, width: null, height: null } };
+  }
+  const decoded = await NI.decodeImage(file);
+  try {
+    const crop = avatar ? NI.initialCrop(1, decoded.width, decoded.height) : null;
+    const result = await NI.encodeImage(decoded, crop, avatar ? NI.AVATAR_SIDE : NI.MAX_SIDE);
+    return { file, gif: false, decoded, crop, result };
+  } catch (e) {
+    decoded.close();
+    throw e;
+  }
+}
+
+function releaseImageItem(item) {
+  if (!item) return;
+  if (item.url) URL.revokeObjectURL(item.url);
+  item.decoded?.close();
+}
+
+function openImagePreview() {
+  closeReactionPopovers();
+  closeEmojiPicker();
+  closeModMenu();
+  const avatar = imgTarget.kind === "avatar";
+  imgPreview.classList.toggle("global", avatar);
+  imgPreviewOverlay.classList.toggle("global", avatar);
+  imgPreviewError.textContent = "";
+  exitCropMode();
+  renderImagePreview();
+  imgPreviewOverlay.hidden = false;
+  imgPreview.hidden = false;
+  imgPreviewSend.focus();
+}
+
+function renderImagePreview() {
+  if (!imgItem) return;
+  const avatar = imgTarget.kind === "avatar";
+  const { result } = imgItem;
+  if (imgItem.url) URL.revokeObjectURL(imgItem.url);
+  imgItem.url = URL.createObjectURL(result.blob);
+  imgPreviewImg.src = imgItem.url;
+
+  const position = imgDone + 1;
+  imgPreviewTitle.textContent = avatar ? STRINGS.imgAvatarTitle
+    : imgTotal > 1 ? fillString(STRINGS.imgTitleQueue, { n: Math.min(position, imgTotal), total: imgTotal })
+    : STRINGS.imgTitle;
+  const kb = NI.kilobytes(result.blob.size).toLocaleString("pt-BR");
+  imgPreviewInfo.textContent = imgItem.gif
+    ? fillString(STRINGS.imgInfoGif, { kb })
+    : fillString(STRINGS.imgInfo, { kb, w: result.width, h: result.height });
+  imgPreviewCrop.hidden = imgItem.gif;
+  renderImageSendButton();
+}
+
+function renderImageSendButton(progress = null) {
+  const avatar = imgTarget?.kind === "avatar";
+  imgPreviewSend.disabled = imgBusy;
+  imgPreviewCancel.disabled = imgBusy;
+  imgPreviewCrop.disabled = imgBusy;
+  imgPreviewSend.textContent = imgBusy
+    ? fillString(STRINGS.imgSending, { p: Math.round((progress || 0) * 100) })
+    : (avatar ? STRINGS.imgSave : STRINGS.imgSend);
+}
+
+/** Closes the popup. `all` also drops the rest of the queue. */
+function closeImagePreview({ all = false } = {}) {
+  imgSeq++;
+  exitCropMode();
+  releaseImageItem(imgItem);
+  imgItem = null;
+  imgBusy = false;
+  imgPreview.hidden = true;
+  imgPreviewOverlay.hidden = true;
+  imgPreviewImg.removeAttribute("src");
+  if (all) {
+    imgQueue = [];
+    imgTarget = null;
+    imgTotal = 0;
+    imgDone = 0;
+    setUploadStatus("");
+  }
+}
+
+/** Current image done (sent or cancelled): show the next one or close. */
+function finishCurrentImage() {
+  const target = imgTarget;
+  imgDone++;
+  closeImagePreview();
+  imgTarget = target;
+  if (imgQueue.length) showNextImage();
+  else closeImagePreview({ all: true });
+  if (target?.kind !== "avatar" && imgPreview.hidden) dmInput.focus({ preventScroll: true });
+}
+
+function cancelImage() {
+  if (imgBusy || !imgItem) return;
+  finishCurrentImage();
+}
+
+/** POST with upload progress (fetch has none). Same token / 401 handling as authFetch. */
+async function authUpload(url, payload, onProgress) {
+  const attempt = async () => {
+    const token = await ensureClientToken();
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.setRequestHeader("X-NAGORA-Token", token);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(e.loaded / e.total); };
+      xhr.onload = () => {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data });
+      };
+      xhr.onerror = () => reject(new Error("network"));
+      xhr.send(JSON.stringify(payload));
+    });
+  };
+  let res = await attempt();
+  if (res.status === 401) {
+    clearClientToken();
+    res = await attempt();
+    if (res.status === 401) location.href = "index.html";
+  }
+  return res;
+}
+
+/** pt-BR text for a failed image send (server texts only for 429). */
+function imageSendErrorText(res) {
+  if (res.status === 429 && res.data?.error) return res.data.error;
+  if (res.status === 400 && res.data?.error === "Image file is too large") return STRINGS.imgServerTooBig;
+  if (res.status === 400 && /image/i.test(res.data?.error || "")) return STRINGS.imgUnsupported;
+  return STRINGS.imgSendFailed;
+}
+
+async function sendCurrentImage() {
+  if (imgBusy || !imgItem || imgCrop) return;
+  const seq = imgSeq;
+  const target = imgTarget;
+  imgBusy = true;
+  imgPreviewError.textContent = "";
+  renderImageSendButton(0);
+  const onProgress = (p) => { if (seq === imgSeq) renderImageSendButton(p); };
+
+  let res;
+  try {
+    const imageBase64 = await fileToBase64(imgItem.result.blob);
+    if (target.kind === "avatar") {
+      res = await authUpload("/api/avatar", { imageBase64 }, onProgress);
+    } else if (target.kind === "dm") {
+      res = await authUpload("/api/file", {
+        recipientUserId: target.recipient.userId,
+        imageBase64,
+        replyToId: replyingTo?.id,
+      }, onProgress);
+    } else {
+      res = await authUpload("/api/rooms", {
+        action: "image",
+        room: target.room,
+        imageBase64,
+        replyToId: replyingTo?.id,
+      }, onProgress);
+    }
+  } catch (e) {
+    console.warn("[app] image send:", e);
+    res = { status: 0, ok: false, data: {} };
+  }
+  if (seq !== imgSeq) {
+    // The popup was closed meanwhile (conversation switched): still refresh the DM.
+    if (res.ok && target.kind === "dm" && selectedUser?.userId === target.recipient.userId) pollConversation();
+    return;
+  }
+  imgBusy = false;
+
+  if (target.kind === "room" && res.status === 403 && res.data?.error === "banned") {
+    myBans = { all: !!res.data.all, rooms: Array.isArray(res.data.rooms) ? res.data.rooms : [] };
+    renderRooms();
+    closeImagePreview({ all: true });
+    if (currentRoom && bannedFromRoom(currentRoom) && !roomBanned) showBanPopup();
+    return;
+  }
+  if (!res.ok) {
+    // The popup stays open with the error so the user can try again.
+    imgPreviewError.textContent = imageSendErrorText(res);
+    renderImageSendButton();
+    imgPreviewSend.focus();
+    return;
+  }
+
+  if (target.kind === "avatar") {
+    avatarEpoch++;
+    me.hasAvatar = true;
+    renderProfileSummary();
+    renderUsers(usersCache);
+    showProfileMessage("Foto atualizada", false);
+    trackAppActivity("avatar_upload");
+  } else {
+    if (replyingTo) clearReply();
+    trackAppActivity("send_media");
+    if (target.kind === "dm") {
+      if (selectedUser?.userId === target.recipient.userId) pollConversation();
+    } else if (target.epoch === roomEpoch && res.data?.message?.id) {
+      if (!roomMessages.some(m => m.id === res.data.message.id)) {
+        roomMessages.push(res.data.message);
+        sortRoomMessages();
+      }
+      if (roomOldestId == null) roomOldestId = roomMessages[0].id;
+      renderRoomMessages({ scroll: "bottom" });
+    }
+  }
+  finishCurrentImage();
+}
+
+// ── Crop mode ──
+function renderCropPresets() {
+  imgCropPresets.innerHTML = "";
+  for (const preset of NI.CROP_PRESETS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = preset.aspect ? preset.id : STRINGS.imgCropFree;
+    btn.setAttribute("aria-pressed", String(imgCrop?.presetId === preset.id));
+    btn.addEventListener("click", () => {
+      if (!imgCrop) return;
+      imgCrop.presetId = preset.id;
+      imgCrop.aspect = preset.aspect;
+      imgCrop.rect = NI.initialCrop(preset.aspect, imgItem.decoded.width, imgItem.decoded.height);
+      renderCropPresets();
+      renderCropBox();
+    });
+    imgCropPresets.appendChild(btn);
+  }
+}
+
+function enterCropMode() {
+  if (!imgItem || imgItem.gif || imgBusy) return;
+  const { decoded } = imgItem;
+  const avatar = imgTarget.kind === "avatar";
+  imgCrop = {
+    presetId: avatar ? "1:1" : "free",
+    aspect: avatar ? 1 : null,
+    rect: { ...(imgItem.crop || NI.initialCrop(null, decoded.width, decoded.height)) },
+    scale: 1,
+    drag: null,
+  };
+  imgPreviewImg.hidden = true;
+  imgCropWrap.hidden = false;
+  imgPreviewActions.hidden = true;
+  imgCropActions.hidden = false;
+  imgCropPresets.hidden = avatar; // avatars are locked to 1:1
+  imgPreviewError.textContent = "";
+  renderCropPresets();
+  drawCropCanvas();
+  imgCropApply.focus();
+}
+
+function exitCropMode() {
+  imgCrop = null;
+  imgCropWrap.hidden = true;
+  imgCropPresets.hidden = true;
+  imgCropActions.hidden = true;
+  imgPreviewActions.hidden = false;
+  imgPreviewImg.hidden = false;
+}
+
+/** The original (uncompressed) image, scaled to fit the stage. */
+function drawCropCanvas() {
+  if (!imgCrop || !imgItem) return;
+  const { decoded } = imgItem;
+  const maxW = Math.max(100, (imgPreviewStage.clientWidth || 320) - 20); // minus the stage padding
+  const maxH = Math.min(window.innerHeight * 0.5, 360);
+  const scale = Math.min(maxW / decoded.width, maxH / decoded.height, 1);
+  const cssW = Math.max(1, Math.round(decoded.width * scale));
+  const cssH = Math.max(1, Math.round(decoded.height * scale));
+  const dpr = window.devicePixelRatio || 1;
+  imgCropCanvas.width = Math.round(cssW * dpr);
+  imgCropCanvas.height = Math.round(cssH * dpr);
+  imgCropCanvas.style.width = `${cssW}px`;
+  imgCropCanvas.style.height = `${cssH}px`;
+  imgCropWrap.style.width = `${cssW}px`;
+  imgCropWrap.style.height = `${cssH}px`;
+  // Scaled copy drawn once; every drag frame only copies it and dims the outside.
+  const base = document.createElement("canvas");
+  base.width = imgCropCanvas.width;
+  base.height = imgCropCanvas.height;
+  base.getContext("2d").drawImage(decoded.source, 0, 0, base.width, base.height);
+  imgCrop.base = base;
+  imgCrop.scale = cssW / decoded.width;
+  imgCrop.dpr = imgCropCanvas.width / cssW;
+  renderCropBox();
+}
+
+function renderCropBox() {
+  if (!imgCrop) return;
+  const { rect, scale } = imgCrop;
+  imgCropBox.style.left = `${rect.x * scale}px`;
+  imgCropBox.style.top = `${rect.y * scale}px`;
+  imgCropBox.style.width = `${rect.w * scale}px`;
+  imgCropBox.style.height = `${rect.h * scale}px`;
+  if (!imgCrop.base) return;
+  const ctx = imgCropCanvas.getContext("2d");
+  const k = scale * imgCrop.dpr;
+  ctx.drawImage(imgCrop.base, 0, 0);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.beginPath();
+  ctx.rect(0, 0, imgCropCanvas.width, imgCropCanvas.height);
+  ctx.rect(rect.x * k, rect.y * k, rect.w * k, rect.h * k);
+  ctx.fill("evenodd");
+}
+
+imgCropBox.addEventListener("pointerdown", (e) => {
+  if (!imgCrop || e.button > 0) return;
+  e.preventDefault();
+  try {
+    imgCropBox.setPointerCapture(e.pointerId); // keeps the drag when the finger leaves the box
+  } catch { /* pointer already gone */ }
+  imgCrop.drag = {
+    pointerId: e.pointerId,
+    corner: e.target.dataset.corner || null,
+    startX: e.clientX,
+    startY: e.clientY,
+    startRect: { ...imgCrop.rect },
+  };
+});
+
+imgCropBox.addEventListener("pointermove", (e) => {
+  const drag = imgCrop?.drag;
+  if (!drag || drag.pointerId !== e.pointerId) return;
+  const { width: W, height: H } = imgItem.decoded;
+  const dx = (e.clientX - drag.startX) / imgCrop.scale;
+  const dy = (e.clientY - drag.startY) / imgCrop.scale;
+  // The minimum side is about 24 screen pixels, so handles never overlap.
+  const min = Math.max(NI.MIN_CROP, 24 / imgCrop.scale);
+  imgCrop.rect = drag.corner
+    ? NI.resizeCrop(drag.startRect, drag.corner, dx, dy, imgCrop.aspect, W, H, min)
+    : NI.moveCrop(drag.startRect, dx, dy, W, H);
+  renderCropBox();
+});
+
+function endCropDrag(e) {
+  if (imgCrop?.drag?.pointerId === e.pointerId) imgCrop.drag = null;
+}
+imgCropBox.addEventListener("pointerup", endCropDrag);
+imgCropBox.addEventListener("pointercancel", endCropDrag);
+
+function resetCrop() {
+  if (!imgCrop) return;
+  const avatar = imgTarget.kind === "avatar";
+  imgCrop.presetId = avatar ? "1:1" : "free";
+  imgCrop.aspect = avatar ? 1 : null;
+  imgCrop.rect = NI.initialCrop(imgCrop.aspect, imgItem.decoded.width, imgItem.decoded.height);
+  renderCropPresets();
+  renderCropBox();
+}
+
+/** Re-encodes from the original decoded image (never from the compressed one). */
+async function applyCrop() {
+  if (!imgCrop || !imgItem || imgBusy) return;
+  const seq = imgSeq;
+  const item = imgItem;
+  const rect = NI.roundCrop(imgCrop.rect, item.decoded.width, item.decoded.height);
+  imgCropApply.disabled = true;
+  try {
+    const result = await NI.encodeImage(item.decoded, rect, imgTarget.kind === "avatar" ? NI.AVATAR_SIDE : NI.MAX_SIDE);
+    if (seq !== imgSeq || item !== imgItem) return;
+    item.crop = rect;
+    item.result = result;
+    exitCropMode();
+    renderImagePreview();
+    imgPreviewSend.focus();
+  } catch (e) {
+    console.warn("[app] crop encode:", e);
+    if (seq === imgSeq) imgPreviewError.textContent = e.message === "too-large" ? STRINGS.imgCompressFailed : STRINGS.imgDecodeFailed;
+  } finally {
+    imgCropApply.disabled = false;
+  }
+}
+
+function cancelCrop() {
+  exitCropMode();
+  imgPreviewCrop.focus();
+}
+
+imgPreviewSend.addEventListener("click", sendCurrentImage);
+imgPreviewCancel.addEventListener("click", cancelImage);
+imgPreviewOverlay.addEventListener("click", () => { if (!imgBusy) cancelImage(); });
+imgPreviewCrop.addEventListener("click", enterCropMode);
+imgCropApply.addEventListener("click", applyCrop);
+imgCropReset.addEventListener("click", resetCrop);
+imgCropCancel.addEventListener("click", cancelCrop);
+window.addEventListener("resize", () => { if (imgCrop) drawCropCanvas(); });
+
+// Drag and drop onto the open conversation (DM or room).
+function dragHasFiles(e) {
+  return [...(e.dataTransfer?.types || [])].includes("Files");
+}
+dmPanel.addEventListener("dragover", (e) => {
+  if (!dragHasFiles(e) || !currentImageTarget()) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+  dmPanel.classList.add("drag-over");
+});
+dmPanel.addEventListener("dragleave", (e) => {
+  if (!dmPanel.contains(e.relatedTarget)) dmPanel.classList.remove("drag-over");
+});
+dmPanel.addEventListener("drop", (e) => {
+  dmPanel.classList.remove("drag-over");
+  if (!dragHasFiles(e)) return;
+  e.preventDefault();
+  queueImages([...e.dataTransfer.files], currentImageTarget());
+});
 
 async function pollConversation() {
   if (!selectedUser || document.visibilityState !== "visible") return;
@@ -2859,6 +3384,7 @@ async function sendMessage() {
 }
 
 dmInput.addEventListener("keydown", (e) => {
+  if (!imgPreview.hidden) return; // the popup owns Enter
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
@@ -2900,40 +3426,23 @@ dmImageBtn.addEventListener("click", () => {
   dmAttachMenu.classList.remove("open");
 });
 
-async function sendImageFile(file) {
-  if (!file || !selectedUser) return;
-
-  if (!file.type.startsWith("image/")) {
-    showImageError("Apenas imagens são permitidas.");
-    return;
-  }
-
-  try {
-    const base64 = await downscaleImage(file);
-    await uploadImageBase64(base64);
-  } catch (e) {
-    console.warn("[app] image upload pipeline:", e);
-    showImageError(e.message || "Falha ao enviar imagem.");
-  }
-}
-
 dmImageInput.addEventListener("change", () => {
-  const file = dmImageInput.files?.[0];
+  const files = [...(dmImageInput.files || [])];
   dmImageInput.value = "";
-  sendImageFile(file);
+  queueImages(files, currentImageTarget());
 });
 
-// Ctrl+V an image into the message box sends it. Clipboards that also carry
-// text (e.g. spreadsheet cells) paste as text, as before.
+// Ctrl+V of one or more images opens the preview popup (queued, one at a
+// time). Clipboards that also carry text (e.g. spreadsheet cells) paste as text.
 dmInput.addEventListener("paste", (e) => {
   const data = e.clipboardData;
-  if (!data || !selectedUser) return;
+  const target = currentImageTarget();
+  if (!data || !target) return;
   if (data.getData("text/plain").trim()) return;
-  const item = [...data.items].find(i => i.kind === "file" && i.type.startsWith("image/"));
-  const file = item?.getAsFile();
-  if (!file) return;
+  const files = [...data.items].filter(i => i.kind === "file").map(i => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
   e.preventDefault();
-  sendImageFile(file);
+  queueImages(files, target);
 });
 
 dmVideoBtn.addEventListener("click", () => {
@@ -3134,42 +3643,11 @@ profilePfpBtn.addEventListener("click", openAvatarPicker);
 shownameEdit.addEventListener("click", enterShownameEdit);
 shownameCancel.addEventListener("click", exitShownameEdit);
 
-profileAvatarInput.addEventListener("change", async () => {
+// Avatar: same preview popup, crop locked to 1:1, then POST /api/avatar.
+profileAvatarInput.addEventListener("change", () => {
   const file = profileAvatarInput.files?.[0];
   profileAvatarInput.value = "";
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    showProfileMessage("Apenas imagens são permitidas.");
-    return;
-  }
-
-  try {
-    const imageBase64 = await downscaleAvatar(file);
-    const r = await authFetch("/api/avatar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ imageBase64 }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      showProfileMessage(data.error || "Erro ao enviar foto");
-      return;
-    }
-    avatarEpoch++;
-    me.hasAvatar = true;
-    renderProfileSummary();
-    renderUsers(usersCache);
-    if (selectedUser?.userId === me.userId) {
-      setAvatarOrFallback(dmHeaderAvatar, me.userId, true, "avatar-img");
-    }
-    showProfileMessage("Foto atualizada", false);
-    trackAppActivity("avatar_upload");
-  } catch (e) {
-    console.warn("[app] avatar upload:", e);
-    showProfileMessage("Erro ao enviar foto");
-  }
+  if (file) queueImages([file], { kind: "avatar" });
 });
 
 /** Saves the display name (sidebar profile and account dashboard). Resolves true on success. */
@@ -3437,7 +3915,7 @@ async function fetchMedia() {
 }
 
 function renderMedia(media) {
-  const images = media.filter(m => m.mediaType?.startsWith("image/"));
+  const images = media.filter(m => m.mediaType?.startsWith("image/")).map(m => ({ ...m, url: fileUrl(m.id) }));
   const audios = media.filter(m => m.mediaType?.startsWith("audio/"));
   const videos = media.filter(m => m.mediaType?.startsWith("video/"));
 
@@ -3684,6 +4162,7 @@ function setComposerDisabled(disabled) {
   dmInput.disabled = disabled;
   dmSend.disabled = disabled;
   dmEmojiBtn.disabled = disabled;
+  dmAttach.disabled = disabled;
 }
 
 function resetRoomMessages() {
@@ -3698,6 +4177,7 @@ function resetRoomMessages() {
 // away only when the user opens a DM or a room they are not banned from.
 function showBanPopup() {
   roomBanned = true;
+  if (imgTarget?.kind === "room") closeImagePreview({ all: true });
   stopRoomPoll();
   resetRoomMessages();
   dmMessages.innerHTML = "";
@@ -3727,6 +4207,7 @@ function leaveRoom() {
   if (!currentRoom && !dmPanel.classList.contains("room-mode")) return;
   currentRoom = null;
   roomEpoch++;
+  if (imgTarget?.kind === "room") closeImagePreview({ all: true });
   stopRoomPoll();
   resetRoomMessages();
   closeModMenu();
@@ -3739,6 +4220,7 @@ function leaveRoom() {
 
 async function openRoom(name) {
   trackAppActivity("open_room");
+  if (imgTarget && imgTarget.kind !== "avatar") closeImagePreview({ all: true });
   closeBubble();
   closeReactBar();
   closeEmojiPicker();
@@ -4121,7 +4603,7 @@ function renderRoomMessages(options = {}) {
     row.appendChild(avatar);
 
     const bubble = document.createElement("div");
-    bubble.className = `dm-bubble ${isOwn ? "own" : "other"}`;
+    bubble.className = `dm-bubble ${isOwn ? "own" : "other"}${m.mediaType ? " media" : ""}`;
     bubble.dataset.id = m.id;
 
     const sender = document.createElement("div");
@@ -4164,10 +4646,16 @@ function renderRoomMessages(options = {}) {
       bubble.appendChild(quote);
     }
 
-    const text = document.createElement("div");
-    text.className = "dm-bubble-text";
-    appendLinkifiedText(m.content || "", text);
-    bubble.appendChild(text);
+    if (m.mediaType?.startsWith("image/")) {
+      bubble.appendChild(createImageBubble(roomImageUrl(m.id)));
+    }
+
+    if (m.content) {
+      const text = document.createElement("div");
+      text.className = "dm-bubble-text";
+      appendLinkifiedText(m.content, text);
+      bubble.appendChild(text);
+    }
 
     const meta = document.createElement("div");
     meta.className = "dm-meta";
@@ -4184,7 +4672,7 @@ function renderRoomMessages(options = {}) {
     replyBtn.innerHTML = '<i class="bi bi-reply"></i>';
     replyBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      setReply({ id: m.id, senderId: m.senderId, senderUsername: name, content: m.content, mediaType: null });
+      setReply({ id: m.id, senderId: m.senderId, senderUsername: name, content: m.content, mediaType: m.mediaType || null });
     });
     bubble.appendChild(replyBtn);
 
@@ -4976,6 +5464,23 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  // Image preview: Enter sends (applies in crop mode), Escape cancels (leaves crop mode).
+  if (!imgPreview.hidden) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (imgBusy) return;
+      if (imgCrop) cancelCrop();
+      else cancelImage();
+      return;
+    }
+    if (e.key === "Enter" && !e.isComposing && !e.target.closest?.("button")) {
+      e.preventDefault();
+      if (imgCrop) applyCrop();
+      else sendCurrentImage();
+    }
+    return;
+  }
+
   if (!dmLightbox.hidden && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
     e.preventDefault();
     showLightboxImage(e.key === "ArrowLeft" ? -1 : 1);

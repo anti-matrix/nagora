@@ -2042,7 +2042,8 @@ body {
   cursor: default;
 }
 .dm-panel.room-mode #dm-status,
-.dm-panel.room-mode .dm-attach-wrap,
+.dm-panel.room-mode #dm-audio-file-btn,
+.dm-panel.room-mode #dm-video-btn,
 .dm-panel.room-mode .dm-audio-btn {
   display: none;
 }
@@ -2863,5 +2864,175 @@ body {
     flex-basis: 56px;
     width: 56px;
     height: 44px;
+  }
+}
+
+/* Rooms accept images: the attach button stays, its audio/video items do not
+   (rule above). A banned room disables it with the rest of the composer. */
+.dm-attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Drag and drop of images onto the open conversation */
+.dm-panel.drag-over .dm-messages {
+  outline: 1px dashed #888;
+  outline-offset: -1px;
+}
+
+/* Image preview popup: the logout dialog's look, centered inside <main> like
+   the room ban popup. The avatar variant (.global) covers the whole page and
+   sits above the account view. */
+.logout-confirm-overlay.img-preview-overlay {
+  position: absolute;
+  z-index: 19;
+}
+.logout-confirm.img-preview {
+  position: absolute;
+  z-index: 20;
+  width: min(440px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+}
+.logout-confirm-overlay.img-preview-overlay.global {
+  position: fixed;
+  z-index: 1150;
+}
+.logout-confirm.img-preview.global {
+  position: fixed;
+  z-index: 1160;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+}
+.img-preview-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 10px;
+  background: #111;
+  border: 1px solid #333;
+}
+.img-preview-stage > img {
+  display: block;
+  max-width: 100%;
+  max-height: min(50vh, 360px);
+  object-fit: contain;
+}
+.img-preview-stage > img[hidden],
+.img-crop[hidden],
+.img-crop-presets[hidden],
+.img-preview .logout-confirm-actions[hidden] {
+  display: none !important;
+}
+.img-preview .logout-confirm-actions button {
+  min-width: 0;
+}
+.img-preview-error {
+  color: #ff6666 !important;
+  font-size: 0.85rem !important;
+}
+.img-preview-error:empty {
+  display: none;
+}
+
+/* Crop mode */
+.img-crop {
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.img-crop canvas {
+  display: block;
+}
+.img-crop-box {
+  position: absolute;
+  outline: 1px solid #fff;
+  cursor: move;
+  touch-action: none;
+}
+.img-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 1px solid #000;
+}
+/* Larger hit area than the visible square. */
+.img-crop-handle::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+.img-crop-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
+.img-crop-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.img-crop-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.img-crop-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.img-crop-presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.img-crop-presets button {
+  min-height: 36px;
+  padding: 0 12px;
+  background: #222;
+  border: 1px solid #444;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.img-crop-presets button[aria-pressed="true"] {
+  background: #333;
+  border-color: #fff;
+}
+
+/* Primary action: same look as the popup's primary button (.user-bubble-actions .primary) */
+.logout-confirm-actions .img-preview-primary {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+  font-weight: 600;
+}
+.logout-confirm-actions .img-preview-primary:hover:not(:disabled) {
+  background: #ddd;
+  border-color: #ddd;
+  color: #000;
+}
+.logout-confirm-actions button:disabled {
+  cursor: default;
+}
+.logout-confirm-actions .img-preview-primary:disabled {
+  background: #222;
+  border-color: #444;
+  color: #888;
+}
+
+@media (pointer: coarse) {
+  .img-crop-handle {
+    width: 18px;
+    height: 18px;
+  }
+  .img-crop-handle.nw { left: -9px; top: -9px; }
+  .img-crop-handle.ne { right: -9px; top: -9px; }
+  .img-crop-handle.sw { left: -9px; bottom: -9px; }
+  .img-crop-handle.se { right: -9px; bottom: -9px; }
+  .img-crop-handle::before {
+    inset: -13px;
+  }
+  .img-crop-presets button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 576px) {
+  .logout-confirm.img-preview {
+    padding: 16px;
+  }
+  .img-preview-stage > img {
+    max-height: 45vh;
   }
 }
