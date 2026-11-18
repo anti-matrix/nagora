@@ -508,4 +508,190 @@ await ok("re-encode: WebP, metadata stripped, client MIME ignored, SVG refused",
   assert.deepEqual([avatar.format, avatar.width, avatar.height], ["webp", 128, 128]);
 });
 
+// ── Integrations (Last.fm, Steam, X), owner dashboard ────────────────────
+const integ = await import("../lib/integrations.js");
+const roomsLib = await import("../lib/rooms.js");
+const { createHash } = await import("node:crypto");
+
+console.log("integrations: visibility, cache, schedule:");
+await ok("visibility: everyone / friends / nobody, the owner always", () => {
+  const v = integ.canViewIntegration;
+  assert.equal(v("everyone", {}), true);
+  assert.equal(v("friends", { isFriend: false }), false);
+  assert.equal(v("friends", { isFriend: true }), true);
+  assert.equal(v("nobody", { isFriend: true }), false);
+  for (const level of integ.VISIBILITIES) assert.equal(v(level, { isSelf: true }), true);
+  assert.equal(v("bogus", { isFriend: true }), false);
+  assert.equal(integ.normalizeVisibility("friends"), "friends");
+  assert.equal(integ.normalizeVisibility("FRIENDS"), null);
+});
+await ok("cache TTL: Last.fm 30 s, Steam 60 s, freshness by age", () => {
+  assert.equal(integ.cacheTtlMs("lastfm"), 30000);
+  assert.equal(integ.cacheTtlMs("steam"), 60000);
+  assert.equal(integ.cacheTtlMs("x"), 0);
+  const now = 1_000_000;
+  assert.equal(integ.isCacheFresh({ at: now - 29_999 }, "lastfm", now), true);
+  assert.equal(integ.isCacheFresh({ at: now - 30_000 }, "lastfm", now), false);
+  assert.equal(integ.isCacheFresh({ at: now - 59_000 }, "steam", now), true);
+  assert.equal(integ.isCacheFresh(null, "steam", now), false);
+});
+await ok("next_check_at: +1 h on success, +10 min on failure", () => {
+  const now = Date.UTC(2026, 10, 17, 12, 0, 0);
+  assert.equal(integ.nextCheckAt(true, now).toISOString(), "2026-11-17T13:00:00.000Z");
+  assert.equal(integ.nextCheckAt(false, now).toISOString(), "2026-11-17T12:10:00.000Z");
+});
+await ok("provider availability follows the env vars (X needs none)", () => {
+  assert.equal(integ.providerAvailable("x", {}), true);
+  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", API_KEY_SEED: "s" }), false);
+  assert.equal(integ.providerAvailable("lastfm", { LASTFM_API_KEY: "k", LASTFM_SHARED_SECRET: "x", API_KEY_SEED: "s" }), true);
+  assert.equal(integ.providerAvailable("steam", { API_KEY_SEED: "s" }), false);
+  assert.equal(integ.providerAvailable("steam", { STEAM_API_KEY: "k", API_KEY_SEED: "s" }), true);
+  assert.equal(integ.providerAvailable("spotify", { STEAM_API_KEY: "k" }), false);
+});
+
+console.log("integrations: signed link state:");
+await ok("state: valid, expired, tampered, other user / provider", () => {
+  const key = integ.stateKey("smoke-seed");
+  assert.notDeepEqual(key, Buffer.from("smoke-seed"), "a derived key, not the seed");
+  const now = 1_700_000_000_000;
+  const token = integ.signState(key, { userId: "U1", provider: "lastfm", nonce: "n1", now });
+  assert.deepEqual(integ.verifyState(key, token, { userId: "U1", provider: "lastfm", now: now + 1000 }), { ok: true, nonce: "n1" });
+  assert.equal(integ.verifyState(key, token, { userId: "U1", provider: "lastfm", now: now + integ.STATE_TTL_MS }).reason, "expired");
+  assert.equal(integ.verifyState(key, token, { userId: "U2", provider: "lastfm", now }).reason, "mismatch");
+  assert.equal(integ.verifyState(key, token, { userId: "U1", provider: "steam", now }).reason, "mismatch");
+  const [payload, sig] = token.split(".");
+  const forged = Buffer.from(JSON.stringify({ u: "U2", p: "lastfm", n: "n1", exp: now + 60000 })).toString("base64url");
+  assert.equal(integ.verifyState(key, `${forged}.${sig}`, { userId: "U2", provider: "lastfm", now }).reason, "signature");
+  assert.equal(integ.verifyState(key, `${payload}.${sig.slice(0, -2)}AA`, { userId: "U1", provider: "lastfm", now }).reason, "signature");
+  assert.equal(integ.verifyState(integ.stateKey("other-seed"), token, { userId: "U1", provider: "lastfm", now }).reason, "signature");
+  assert.equal(integ.verifyState(key, "garbage", { userId: "U1", provider: "lastfm", now }).reason, "malformed");
+});
+
+console.log("integrations: X:");
+await ok("X handle normalization and bio code", () => {
+  assert.equal(integ.normalizeXHandle("@Nasa_JPL"), "Nasa_JPL");
+  assert.equal(integ.normalizeXHandle("https://x.com/NASA?s=20"), "NASA");
+  assert.equal(integ.normalizeXHandle("twitter.com/jack/"), "jack");
+  assert.equal(integ.normalizeXHandle("bad handle"), null);
+  assert.equal(integ.normalizeXHandle("waytoolonghandle1"), null);
+  const code = integ.makeXCode((n) => n - 1);
+  assert.match(code, /^nagora-[a-z0-9]{5}$/);
+  assert.equal(integ.bioHasCode(`Photographer. ${code.toUpperCase()} 🌙`, code), true);
+  assert.equal(integ.bioHasCode("Photographer. nagora-zzzzz", code), false);
+  assert.equal(integ.bioHasCode(undefined, code), false);
+});
+await ok("X: last original post skips retweet, reply and pinned; quote counts", () => {
+  const me = { screen_name: "Someone" };
+  const s = (id, ts, extra = {}) => ({ type: "status", id, created_timestamp: ts, text: `post ${id}`, url: `https://x.com/Someone/status/${id}`, author: me, replying_to: null, reposted_by: null, ...extra });
+  const pinned = s("1", 100);
+  const original = s("2", 500);
+  const retweet = s("3", 900, { author: { screen_name: "Other" }, reposted_by: me });
+  const reply = s("4", 800, { replying_to: { screen_name: "Other", status: "77" } });
+  const quote = s("5", 700, { quote: { text: "quoted text", url: "https://x.com/Other/status/66", author: { screen_name: "Other" } } });
+  const pick = (list) => integ.pickLastOriginalPost(list, "someone")?.id ?? null;
+  assert.equal(pick([pinned, retweet, reply, original]), "2", "retweet and reply skipped, old pinned skipped");
+  assert.equal(pick([pinned, retweet, reply, quote, original]), "5", "a quote post counts");
+  assert.equal(pick([retweet, reply]), null, "no original post: nothing");
+  assert.equal(pick([original]), "2", "a single post is not treated as pinned");
+  assert.equal(pick([s("9", 1000), original]), "9", "a newest first post is not pinned");
+  const stored = integ.summarizePost(quote);
+  assert.deepEqual(stored.quote, { author: "Other", text: "quoted text", url: "https://x.com/Other/status/66" });
+  assert.equal(stored.createdAt, new Date(700_000).toISOString());
+});
+await ok("X: stored post keeps only https x.com / pbs.twimg.com URLs", () => {
+  const post = integ.summarizePost({
+    id: 1, text: "hi", created_timestamp: 1, url: "javascript:alert(1)",
+    media: {
+      photos: [{ url: "https://pbs.twimg.com/media/A.jpg?name=orig" }, { url: "https://evil.example/x.jpg" }],
+      videos: [{ thumbnail_url: "https://pbs.twimg.com/ext_tw_video_thumb/1/pu/img/B.jpg" }, { thumbnail_url: "http://pbs.twimg.com/C.jpg" }],
+    },
+  });
+  assert.equal(post.url, null);
+  assert.deepEqual(post.media, ["https://pbs.twimg.com/media/A.jpg?name=small", "https://pbs.twimg.com/ext_tw_video_thumb/1/pu/img/B.jpg"]);
+});
+await ok("X: FxTwitter profile shape", () => {
+  const p = integ.parseFxProfile({ code: 200, message: "OK", user: { screen_name: "NASA", name: "NASA", description: "Bio nagora-abcde" } });
+  assert.deepEqual(p, { screenName: "NASA", name: "NASA", description: "Bio nagora-abcde" });
+  assert.equal(integ.parseFxProfile({ code: 404, message: "User not found" }), null);
+});
+
+console.log("integrations: Last.fm and Steam shapes:");
+await ok("Last.fm: api_sig is MD5 of sorted name+value pairs + secret (format excluded)", () => {
+  const sig = integ.lastfmSignature({ token: "TOK", method: "auth.getSession", api_key: "KEY", format: "json" }, "SECRET");
+  assert.equal(sig, createHash("md5").update("api_keyKEYmethodauth.getSessiontokenTOKSECRET").digest("hex"));
+  assert.equal(integ.lastfmAuthUrl("K y"), "https://www.last.fm/api/auth/?api_key=K%20y");
+  assert.deepEqual(integ.parseLastfmSession({ session: { name: "rj", key: "SESSIONKEY", subscriber: 0 } }), { name: "rj" });
+  assert.throws(() => integ.parseLastfmSession({ error: 4, message: "Invalid token" }));
+});
+await ok("Last.fm: now playing, last played, single object, placeholder art, private", () => {
+  const img = (url) => [{ size: "small", "#text": "" }, { size: "extralarge", "#text": url }];
+  const now = integ.parseLastfmRecent({ recenttracks: { track: [
+    { artist: { "#text": "Daft Punk" }, name: "Veridis Quo", album: { "#text": "Discovery" }, image: img("https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg"), "@attr": { nowplaying: "true" }, url: "https://www.last.fm/music/Daft+Punk/_/Veridis+Quo" },
+    { artist: { "#text": "Air" }, name: "La femme d'argent", album: { "#text": "" }, image: [], date: { uts: "1700000000" } },
+  ], "@attr": { user: "rj" } } });
+  assert.equal(now.nowPlaying, true);
+  assert.equal(now.title, "Veridis Quo");
+  assert.equal(now.artist, "Daft Punk");
+  assert.equal(now.imageUrl, "https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg");
+  assert.equal(now.playedAt, null);
+  const last = integ.parseLastfmRecent({ recenttracks: { track: { artist: { "#text": "Air" }, name: "Talisman", album: { "#text": "" }, image: img("https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png"), date: { uts: "1700000000" } } } });
+  assert.equal(last.nowPlaying, false);
+  assert.equal(last.imageUrl, null, "Last.fm's placeholder star is not album art");
+  assert.equal(last.album, null);
+  assert.equal(last.playedAt, new Date(1700000000 * 1000).toISOString());
+  assert.equal(integ.parseLastfmRecent({ recenttracks: { track: [] } }), null);
+  assert.throws(() => integ.parseLastfmRecent({ error: 17, message: "Login: User required to be logged in" }), (e) => e.code === 17);
+});
+await ok("Steam: player summary (public in game, private), OpenID assertion checks", () => {
+  const pub = integ.parseSteamPlayer({ response: { players: [{ steamid: "76561197960435530", communityvisibilitystate: 3, personaname: "Robin", personastate: 1, gameextrainfo: "Counter-Strike 2", gameid: "730", avatarfull: "https://avatars.steamstatic.com/abc_full.jpg", profileurl: "https://steamcommunity.com/id/robinwalker/" }] } });
+  assert.equal(pub.state, "online");
+  assert.equal(pub.isPublic, true);
+  assert.deepEqual(pub.game, { name: "Counter-Strike 2", id: "730", capsuleUrl: "https://cdn.cloudflare.steamstatic.com/steam/apps/730/capsule_184x69.jpg" });
+  const priv = integ.parseSteamPlayer({ response: { players: [{ steamid: "1", communityvisibilitystate: 1, personaname: "Hidden", personastate: 0 }] } });
+  assert.equal(priv.isPublic, false);
+  assert.equal(priv.game, null);
+  assert.equal(integ.parseSteamPlayer({ response: { players: [] } }), null);
+
+  const origin = "https://etanagora.vercel.app";
+  const claimed = "https://steamcommunity.com/openid/id/76561197960435530";
+  const good = {
+    "openid.mode": "id_res", "openid.op_endpoint": "https://steamcommunity.com/openid/login",
+    "openid.return_to": `${origin}/api/steam-callback`, "openid.claimed_id": claimed, "openid.identity": claimed,
+    "openid.sig": "x", route: "steam-callback",
+  };
+  assert.deepEqual(integ.readSteamAssertion(good, origin), { steamId: "76561197960435530" });
+  assert.equal(integ.readSteamAssertion({ ...good, "openid.return_to": "https://evil.example/api/steam-callback" }, origin).error, "failed");
+  assert.equal(integ.readSteamAssertion({ ...good, "openid.claimed_id": "https://steamcommunity.com/openid/id/123" }, origin).error, "failed");
+  assert.equal(integ.readSteamAssertion({ "openid.mode": "cancel" }, origin).error, "denied");
+  const body = integ.steamCheckBody(good);
+  assert.equal(body.get("openid.mode"), "check_authentication");
+  assert.equal(body.get("route"), null, "only openid.* fields go back to Steam");
+  assert.equal(integ.steamCheckValid("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), true);
+  assert.equal(integ.steamCheckValid("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"), false);
+  assert.match(integ.steamLoginUrl(origin), /^https:\/\/steamcommunity\.com\/openid\/login\?.*openid\.return_to=https%3A%2F%2Fetanagora\.vercel\.app%2Fapi%2Fsteam-callback/);
+});
+
+console.log("owner dashboard:");
+await ok("owner-only permission: only role owner; owner acts on users and mods, never another owner", () => {
+  assert.equal(roomsLib.isOwner("owner"), true);
+  assert.equal(roomsLib.isOwner("mod"), false);
+  assert.equal(roomsLib.isOwner("user"), false);
+  assert.equal(roomsLib.isOwner(undefined), false);
+  assert.equal(roomsLib.canModerate("owner", "user"), true);
+  assert.equal(roomsLib.canModerate("owner", "mod"), true);
+  assert.equal(roomsLib.canModerate("owner", "owner"), false);
+});
+await ok("reserved usernames: lowercase, '@' dropped, signup rule", () => {
+  assert.deepEqual(validate.normalizeReservedUsername("  @Admin123 "), { name: "admin123" });
+  assert.ok(validate.normalizeReservedUsername("abc").error, "too short");
+  assert.ok(validate.normalizeReservedUsername("has space1").error, "whitespace");
+  assert.ok(validate.normalizeReservedUsername("a".repeat(16)).error, "too long");
+  assert.equal(validate.usernameProblem("valid_name"), null);
+});
+await ok("room registry: every room has a one-line description", () => {
+  const d = roomsLib.roomDescriptions();
+  assert.deepEqual(Object.keys(d), roomsLib.ROOMS);
+  for (const room of roomsLib.ROOMS) assert.ok(d[room] && !d[room].includes("\n"));
+});
+
 console.log(`\nAll ${passed} tests passed.`);
