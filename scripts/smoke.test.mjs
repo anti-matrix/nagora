@@ -722,6 +722,25 @@ await ok("room registry: every room has a one-line description", () => {
   const d = roomsLib.roomDescriptions();
   assert.deepEqual(Object.keys(d), roomsLib.ROOMS);
   for (const room of roomsLib.ROOMS) assert.ok(d[room] && !d[room].includes("\n"));
+  assert.equal(d.POLITICS, "Política e atualidades.");
+  assert.equal(d.AKSHUALLY, "O mesmo que Global, só que sério.");
+});
+await ok("room nicknames: trimmed, spaces collapsed, invisible characters dropped, 20 max", () => {
+  const n = roomsLib.normalizeNickname;
+  assert.deepEqual(n("  o   sábio  "), { value: "o sábio" });
+  assert.deepEqual(n("a\u200Bb\u202Ec\u0007"), { value: "abc" });
+  assert.deepEqual(n(""), { value: null });
+  assert.deepEqual(n("   "), { value: null });
+  assert.deepEqual(n(null), { value: null });
+  assert.deepEqual(n(undefined), { value: null });
+  assert.deepEqual(n("\u200B"), { value: null });
+  assert.ok(n(42).error);
+  assert.deepEqual(n("x".repeat(20)), { value: "x".repeat(20) });
+  assert.ok(n("x".repeat(21)).error);
+  // Code points, like the table's char_length: 20 emoji fit.
+  assert.deepEqual(n("😀".repeat(20)), { value: "😀".repeat(20) });
+  assert.ok(n("😀".repeat(21)).error);
+  assert.equal(roomsLib.NICKNAME_MAX, 20);
 });
 
 console.log(`\nAll ${passed} tests passed.`);

@@ -66,6 +66,7 @@
                     <span class="dm-header-avatar" id="dm-header-avatar"><i class="bi bi-person-circle"></i></span>
                     <span class="status-dot offline" id="dm-status" aria-hidden="true"></span>
                     <h4 id="dm-username"></h4>
+                    <span class="dm-room-board" id="dm-room-board" hidden></span>
                 </div>
                 <div class="dm-typing" id="dm-typing"></div>
                 <div class="dm-reply-bar" id="dm-reply-bar" hidden>
@@ -367,6 +368,10 @@
                         <div><dt data-str="accountRole"></dt><dd id="account-role"></dd></div>
                     </dl>
                     <p class="account-note" id="account-bans"></p>
+                    <span class="account-label" data-str="nickTitle"></span>
+                    <p class="account-note" data-str="nickNote"></p>
+                    <div class="account-nicknames" id="account-nicknames"></div>
+                    <div class="account-message" id="account-nick-message" role="status"></div>
                 </section>
 
                 <section class="account-section" aria-labelledby="account-session-title">
@@ -386,6 +391,7 @@
                     <button type="button" class="active" id="owner-tab-bans" role="tab" aria-selected="true" aria-controls="owner-panel-bans" data-str="ownerTabBans"></button>
                     <button type="button" id="owner-tab-ban" role="tab" aria-selected="false" aria-controls="owner-panel-ban" data-str="ownerTabBan"></button>
                     <button type="button" id="owner-tab-reserved" role="tab" aria-selected="false" aria-controls="owner-panel-reserved" data-str="ownerTabReserved"></button>
+                    <button type="button" id="owner-tab-nicks" role="tab" aria-selected="false" aria-controls="owner-panel-nicks" data-str="ownerTabNicks"></button>
                 </div>
                 <div class="auth-body">
                     <div id="owner-message" class="mb-3 small" role="status"></div>
@@ -422,6 +428,27 @@
                         </form>
                         <p class="form-text" data-str="ownerReserveNote"></p>
                         <div class="owner-list" id="owner-reserved-list"></div>
+                    </div>
+
+                    <div id="owner-panel-nicks" role="tabpanel" aria-labelledby="owner-tab-nicks" hidden>
+                        <h4 class="text-center mb-3 owner-panel-title" data-str="ownerNicksTitle"></h4>
+                        <form class="mb-3" id="owner-nick-form" novalidate>
+                            <div class="mb-3">
+                                <label for="owner-nick-username" class="form-label" data-str="ownerUsernameLabel"></label>
+                                <input type="text" class="form-control" id="owner-nick-username" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40" data-str-placeholder="ownerUsernamePlaceholder"/>
+                            </div>
+                            <fieldset class="mb-3">
+                                <legend class="form-label owner-legend" data-str="ownerNickRoomLabel"></legend>
+                                <div id="owner-nick-rooms"></div>
+                            </fieldset>
+                            <div class="mb-3">
+                                <label for="owner-nick-input" class="form-label" data-str="ownerNickLabel"></label>
+                                <input type="text" class="form-control" id="owner-nick-input" autocomplete="off" spellcheck="false" maxlength="40"/>
+                                <div class="form-text" data-str="ownerNickRule"></div>
+                            </div>
+                            <button type="submit" class="btn btn-light w-100" id="owner-nick-submit" data-str="ownerNickSubmit"></button>
+                        </form>
+                        <div class="owner-list" id="owner-nick-list"></div>
                     </div>
                 </div>
             </div>
@@ -520,6 +547,7 @@ const STRINGS = {
   roomDeleted: "Mensagem apagada",
   roomModBadge: "MOD",
   roomModBadgeLabel: "Moderador",
+  nickBadgeLabel: "Apelido nesta sala",
   roomBannedRow: "Você foi banido desta sala",
   roomSendFailed: "Falha ao enviar mensagem.",
   roomTooLong: "Mensagem muito longa (máx. 2000 caracteres).",
@@ -604,6 +632,15 @@ const STRINGS = {
   roleMod: "Moderador",
   roleOwner: "Dono",
   bansNone: "Você não está banido de nenhuma sala.",
+  nickTitle: "Apelidos",
+  nickNote: "Um apelido por sala, mostrado em cinza ao lado do seu nome. Até 20 caracteres; deixe em branco para remover.",
+  nickPlaceholder: "Sem apelido",
+  nickInputLabel: "Apelido em {room}",
+  nickSaved: "Apelido salvo em {room}.",
+  nickRemoved: "Apelido removido de {room}.",
+  nickTooLong: "Use até 20 caracteres.",
+  nickBanned: "Você está banido desta sala.",
+  nickFailed: "Não foi possível salvar o apelido.",
   accountSession: "Sessão",
   accountLogout: "Sair da conta",
 
@@ -747,6 +784,20 @@ const STRINGS = {
   ownerTabBans: "Banidos",
   ownerTabBan: "Banir",
   ownerTabReserved: "Reservados",
+  ownerTabNicks: "Apelidos",
+  ownerNicksTitle: "Apelidos por sala",
+  ownerNickRoomLabel: "Sala",
+  ownerNickLabel: "Apelido",
+  ownerNickRule: "Até 20 caracteres. Em branco remove o apelido.",
+  ownerNickSubmit: "Salvar apelido",
+  ownerNickPickRoom: "Escolha uma sala.",
+  ownerNickSaved: "Apelido de @{user} em {room}: \"{nick}\".",
+  ownerNickRemoved: "Apelido de @{user} em {room} removido.",
+  ownerNickEdit: "Editar",
+  ownerNickRemove: "Remover",
+  ownerNickRemoveTitle: "Remover apelido",
+  ownerNickRemoveConfirm: "Remover o apelido \"{nick}\" de @{user} em {room}?",
+  ownerNoNicks: "Ninguém tem apelido.",
   ownerSearchLabel: "Buscar",
   ownerSearchPlaceholder: "@usuário",
   ownerNoBans: "Ninguém está banido.",
@@ -793,6 +844,8 @@ const ROOM_POLL_MS = 2000;
 const ROOM_MAX_LENGTH = 2000;
 const ROOM_ICONS = { GLOBAL: "bi-globe2", POLITICS: "bi-bank", AKSHUALLY: "bi-eyeglasses" };
 const ROOM_ICON_FALLBACK = "bi-hash";
+// The board tag shown in grey italics beside the room name in the header.
+const ROOM_BOARDS = { GLOBAL: "/b/", POLITICS: "/pol/", AKSHUALLY: "/d/" };
 
 let roomNames = [];                       // from the server (lib/rooms.js ROOMS)
 let myBans = { all: false, rooms: [] };   // the caller's own bans; re-fetched on every room entry
@@ -934,6 +987,7 @@ const userList = document.getElementById("user-list");
 const dmPlaceholder = document.getElementById("dm-placeholder");
 const dmPanel = document.getElementById("dm-panel");
 const dmUsername = document.getElementById("dm-username");
+const dmRoomBoard = document.getElementById("dm-room-board");
 const dmStatus = document.getElementById("dm-status");
 const dmTyping = document.getElementById("dm-typing");
 const dmMessages = document.getElementById("dm-messages");
@@ -1066,11 +1120,13 @@ const ownerTabs = {
   bans: document.getElementById("owner-tab-bans"),
   ban: document.getElementById("owner-tab-ban"),
   reserved: document.getElementById("owner-tab-reserved"),
+  nicks: document.getElementById("owner-tab-nicks"),
 };
 const ownerPanels = {
   bans: document.getElementById("owner-panel-bans"),
   ban: document.getElementById("owner-panel-ban"),
   reserved: document.getElementById("owner-panel-reserved"),
+  nicks: document.getElementById("owner-panel-nicks"),
 };
 const ownerBansSearch = document.getElementById("owner-bans-search");
 const ownerBansList = document.getElementById("owner-bans-list");
@@ -1083,6 +1139,12 @@ const ownerReserveForm = document.getElementById("owner-reserve-form");
 const ownerReserveInput = document.getElementById("owner-reserve-input");
 const ownerReserveSubmit = document.getElementById("owner-reserve-submit");
 const ownerReservedList = document.getElementById("owner-reserved-list");
+const ownerNickForm = document.getElementById("owner-nick-form");
+const ownerNickUsername = document.getElementById("owner-nick-username");
+const ownerNickRooms = document.getElementById("owner-nick-rooms");
+const ownerNickInput = document.getElementById("owner-nick-input");
+const ownerNickSubmit = document.getElementById("owner-nick-submit");
+const ownerNickList = document.getElementById("owner-nick-list");
 const accountView = document.getElementById("account-view");
 const accountScroll = document.getElementById("account-scroll");
 const accountClose = document.getElementById("account-close");
@@ -1137,6 +1199,8 @@ const accountRemoveCancel = document.getElementById("account-remove-cancel");
 const accountEmailMessage = document.getElementById("account-email-message");
 const accountRole = document.getElementById("account-role");
 const accountBans = document.getElementById("account-bans");
+const accountNicknames = document.getElementById("account-nicknames");
+const accountNickMessage = document.getElementById("account-nick-message");
 const accountLogout = document.getElementById("account-logout");
 
 const userBubble = document.getElementById("user-bubble");
@@ -4534,6 +4598,8 @@ function leaveRoom() {
   hideBanPopup();
   clearReply();
   dmPanel.classList.remove("room-mode");
+  dmRoomBoard.hidden = true;
+  dmRoomBoard.textContent = "";
   roomPanelOpenMobile = false;
   stopRoomFeed();
   showRoomInfo(); // also hides the rooms sidebar (no room)
@@ -4573,6 +4639,8 @@ async function openRoom(name) {
   dmPanel.classList.add("room-mode");
   dmUsername.textContent = name;
   delete dmUsername.dataset.userid;
+  dmRoomBoard.textContent = ROOM_BOARDS[name] || "";
+  dmRoomBoard.hidden = !ROOM_BOARDS[name];
   dmHeaderAvatar.innerHTML = "";
   const glyph = document.createElement("i");
   glyph.className = `bi ${ROOM_ICONS[name] || ROOM_ICON_FALLBACK}`;
@@ -4944,6 +5012,13 @@ function renderRoomMessages(options = {}) {
       badge.textContent = STRINGS.roomModBadge;
       badge.title = STRINGS.roomModBadgeLabel;
       sender.appendChild(badge);
+    }
+    if (m.senderNickname) {
+      const nick = document.createElement("span");
+      nick.className = "room-nick-badge";
+      nick.textContent = m.senderNickname;
+      nick.title = STRINGS.nickBadgeLabel;
+      sender.appendChild(nick);
     }
     bubble.appendChild(sender);
 
@@ -5418,7 +5493,116 @@ function renderAccountDetails() {
   accountBans.textContent = banned ? banMessage(myBans) : STRINGS.bansNone;
   accountBans.classList.toggle("warn", banned);
 
+  renderAccountNicknames();
   renderAccountEmail();
+}
+
+// ── Room nicknames ("apelidos") ─────────────────────────────────────────
+let accountNickBusy = false;
+let accountNickSaved = null; // room whose input shows the saved value on the next render
+
+function nicknameLength(value) {
+  return [...value.replace(/\s+/g, " ").trim()].length;
+}
+
+/** One row per room: name + board, the input and "Salvar". Banned rooms are read-only. */
+function renderAccountNicknames() {
+  const focused = document.activeElement?.closest?.(".account-nick-row")?.dataset.room;
+  const drafts = {};
+  // Keep only what the user typed and has not saved yet.
+  for (const input of accountNicknames.querySelectorAll("input")) {
+    if (input.value !== input.dataset.initial) drafts[input.dataset.room] = input.value;
+  }
+  accountNicknames.innerHTML = "";
+  const nicknames = accountData?.nicknames || {};
+  const names = roomNames.length ? roomNames : Object.keys(ROOM_ICONS);
+  for (const room of names) {
+    const banned = bannedFromRoom(room);
+    const form = el("form", "account-row account-nick-row");
+    form.noValidate = true;
+    form.dataset.room = room;
+    const label = el("span", "account-nick-room");
+    const icon = el("i", `bi ${ROOM_ICONS[room] || ROOM_ICON_FALLBACK}`);
+    icon.setAttribute("aria-hidden", "true");
+    label.append(icon, " ", room);
+    if (ROOM_BOARDS[room]) label.appendChild(el("span", "dm-room-board", ROOM_BOARDS[room]));
+    const input = el("input");
+    input.type = "text";
+    input.maxLength = 40;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.dataset.room = room;
+    input.placeholder = STRINGS.nickPlaceholder;
+    input.setAttribute("aria-label", fillString(STRINGS.nickInputLabel, { room }));
+    input.dataset.initial = nicknames[room] || "";
+    input.value = room in drafts && room !== accountNickSaved ? drafts[room] : input.dataset.initial;
+    input.disabled = banned || !accountData || accountNickBusy;
+    if (banned) input.title = STRINGS.nickBanned;
+    const save = el("button", "account-btn", STRINGS.accountSave);
+    save.type = "submit";
+    save.disabled = input.disabled;
+    form.append(label, input, save);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      saveNickname(room, input.value);
+    });
+    accountNicknames.appendChild(form);
+    if (focused === room && !input.disabled) input.focus();
+  }
+}
+
+async function saveNickname(room, raw) {
+  if (accountNickBusy || !accountData) return;
+  if (nicknameLength(raw) > 20) {
+    setAccountMessage(accountNickMessage, STRINGS.nickTooLong);
+    return;
+  }
+  accountNickBusy = true;
+  setAccountMessage(accountNickMessage, "");
+  renderAccountNicknames();
+  try {
+    const r = await authFetch("/api/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "setNickname", room, nickname: raw }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 429) throw new Error(data.error || STRINGS.nickFailed);
+    if (r.status === 403 && data.error === "banned") {
+      setMyRoomState({ bans: { all: !!data.all, rooms: data.rooms || [] } });
+      renderRooms();
+      throw new Error(STRINGS.nickBanned);
+    }
+    if (r.status === 400 && /characters/.test(data.error || "")) throw new Error(STRINGS.nickTooLong);
+    if (!r.ok) throw new Error(STRINGS.nickFailed);
+    accountData.nicknames = { ...(accountData.nicknames || {}) };
+    if (data.nickname) accountData.nicknames[room] = data.nickname;
+    else delete accountData.nicknames[room];
+    applyOwnNickname(room, data.nickname || null);
+    accountNickSaved = room;
+    setAccountMessage(accountNickMessage, fillString(data.nickname ? STRINGS.nickSaved : STRINGS.nickRemoved, { room }), false, 3000);
+    trackAppActivity("set_nickname");
+  } catch (e) {
+    setAccountMessage(accountNickMessage, e.message || STRINGS.nickFailed);
+  } finally {
+    accountNickBusy = false;
+    renderAccountNicknames();
+    accountNickSaved = null;
+  }
+}
+
+/** Your messages already on screen in that room show the new nickname at once. */
+function applyOwnNickname(room, nickname) {
+  if (currentRoom !== room || !me?.userId) return;
+  let changed = false;
+  for (const m of roomMessages) {
+    if (m.senderId === me.userId && !m.deleted) {
+      m.senderNickname = nickname;
+      changed = true;
+    }
+  }
+  if (changed) renderRoomMessages({ scroll: "auto" });
 }
 
 function renderAccountEmail() {
@@ -6444,6 +6628,7 @@ let ownerSeq = 0;
 let ownerBusy = false;
 let ownerBanned = [];
 let ownerReserved = [];
+let ownerNicks = [];
 let ownerLookupAccount = null;
 let ownerLookupTimer = null;
 let ownerLookupSeq = 0;
@@ -6487,6 +6672,10 @@ function switchOwnerTab(tab) {
   if (tab === "ban") {
     renderOwnerBanRooms();
     ownerBanUsername.focus();
+  }
+  if (tab === "nicks") {
+    renderOwnerNickRooms();
+    ownerNickUsername.focus();
   }
 }
 
@@ -6788,6 +6977,134 @@ ownerReserveForm.addEventListener("submit", async (e) => {
   await loadOwnerReserved();
 });
 
+// ── Owner: room nicknames ──
+function renderOwnerNickRooms(selected) {
+  const current = selected ?? ownerNickRooms.querySelector("input:checked")?.value;
+  ownerNickRooms.innerHTML = "";
+  const names = roomNames.length ? roomNames : Object.keys(ROOM_ICONS);
+  for (const room of names) {
+    const wrap = el("div", "form-check");
+    const input = el("input", "form-check-input");
+    input.type = "radio";
+    input.name = "owner-nick-room";
+    input.id = `owner-nick-room-${room}`;
+    input.value = room;
+    input.checked = current === room;
+    const label = el("label", "form-check-label", `${room} ${ROOM_BOARDS[room] || ""}`.trim());
+    label.htmlFor = input.id;
+    wrap.append(input, label);
+    ownerNickRooms.appendChild(wrap);
+  }
+}
+
+async function loadOwnerNicks() {
+  const seq = ownerSeq;
+  const { r, data } = await ownerRequest("/api/owner?type=nicknames");
+  if (seq !== ownerSeq || !r.ok) return;
+  ownerNicks = data.nicknames || [];
+  renderOwnerNicks();
+}
+
+function renderOwnerNicks() {
+  ownerNickList.innerHTML = "";
+  if (!ownerNicks.length) {
+    ownerNickList.appendChild(el("p", "form-text", STRINGS.ownerNoNicks));
+    return;
+  }
+  for (const n of ownerNicks) {
+    const row = el("div", "owner-row");
+    const who = el("div", "owner-row-who");
+    who.appendChild(el("span", "owner-row-handle", `@${n.username}`));
+    who.appendChild(el("span", "owner-row-name", `${n.room} ${ROOM_BOARDS[n.room] || ""}`.trim()));
+    row.appendChild(who);
+    row.appendChild(el("div", "owner-row-nick", n.nickname));
+    const actions = el("div", "account-actions");
+    const edit = el("button", "account-btn", STRINGS.ownerNickEdit);
+    edit.type = "button";
+    edit.disabled = ownerBusy;
+    edit.addEventListener("click", () => {
+      ownerNickUsername.value = n.username;
+      ownerNickInput.value = n.nickname;
+      renderOwnerNickRooms(n.room);
+      ownerNickInput.focus();
+      ownerNickInput.select();
+    });
+    const remove = el("button", "account-btn danger", STRINGS.ownerNickRemove);
+    remove.type = "button";
+    remove.disabled = ownerBusy;
+    remove.addEventListener("click", () => ownerRemoveNick(n));
+    actions.append(edit, remove);
+    row.appendChild(actions);
+    ownerNickList.appendChild(row);
+  }
+}
+
+async function ownerSaveNick(username, room, nickname) {
+  ownerBusy = true;
+  ownerNickSubmit.disabled = true;
+  renderOwnerNicks();
+  try {
+    const { r, data } = await ownerRequest("/api/owner", { action: "setNickname", username, room, nickname });
+    if (r.ok) {
+      setOwnerMessage(fillString(data.nickname ? STRINGS.ownerNickSaved : STRINGS.ownerNickRemoved,
+        { user: data.username, room: data.room, nick: data.nickname || "" }), "text-success");
+      trackAppActivity("owner_nickname");
+      if (data.username.toLowerCase() === (me?.username || "").toLowerCase()) {
+        if (accountData) {
+          accountData.nicknames = { ...(accountData.nicknames || {}) };
+          if (data.nickname) accountData.nicknames[room] = data.nickname;
+          else delete accountData.nicknames[room];
+        }
+        applyOwnNickname(room, data.nickname || null);
+      }
+      return true;
+    }
+    if (r.status === 404) setOwnerMessage(STRINGS.ownerLookupNone, "text-danger");
+    else if (r.status === 400 && /characters/.test(data.error || "")) setOwnerMessage(STRINGS.nickTooLong, "text-danger");
+    else if (r.status !== 403) setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    return false;
+  } catch (e) {
+    console.warn("[app] owner nickname:", e);
+    setOwnerMessage(STRINGS.ownerFailed, "text-danger");
+    return false;
+  } finally {
+    ownerBusy = false;
+    ownerNickSubmit.disabled = false;
+    await loadOwnerNicks();
+  }
+}
+
+async function ownerRemoveNick(n) {
+  if (ownerBusy) return;
+  const ok = await confirmModAction({
+    title: STRINGS.ownerNickRemoveTitle,
+    message: fillString(STRINGS.ownerNickRemoveConfirm, { nick: n.nickname, user: n.username, room: n.room }),
+    okLabel: STRINGS.ownerNickRemove,
+  });
+  if (!ok) return;
+  await ownerSaveNick(n.username, n.room, null);
+}
+
+ownerNickForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (ownerBusy) return;
+  const username = ownerNickUsername.value.trim().replace(/^@+/, "");
+  if (!username) {
+    setOwnerMessage(STRINGS.ownerBanPickUser, "text-danger");
+    return;
+  }
+  const room = ownerNickRooms.querySelector("input:checked")?.value;
+  if (!room) {
+    setOwnerMessage(STRINGS.ownerNickPickRoom, "text-danger");
+    return;
+  }
+  if (nicknameLength(ownerNickInput.value) > 20) {
+    setOwnerMessage(STRINGS.nickTooLong, "text-danger");
+    return;
+  }
+  if (await ownerSaveNick(username, room, ownerNickInput.value)) ownerNickInput.value = "";
+});
+
 function openOwner() {
   if (myRole !== "owner") return;
   trackAppActivity("open_owner");
@@ -6804,8 +7121,11 @@ function openOwner() {
   renderOwnerLookup(null);
   switchOwnerTab("bans");
   ownerClose.focus();
+  ownerNickUsername.value = "";
+  ownerNickInput.value = "";
   loadOwnerBans();
   loadOwnerReserved();
+  loadOwnerNicks();
 }
 
 function closeOwner() {

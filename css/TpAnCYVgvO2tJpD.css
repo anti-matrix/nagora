@@ -3463,3 +3463,77 @@ body {
   min-height: 0;
   overflow-y: auto;
 }
+
+/* Room board tag beside the room name in the header (/b/, /pol/, /d/) */
+.dm-room-board {
+  flex-shrink: 0;
+  color: #888;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+.dm-room-board[hidden] {
+  display: none !important;
+}
+
+/* Room nickname ("apelido"): like the MOD tag, smaller and always grey */
+.room-nick-badge {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 50%;
+  padding: 0 4px;
+  border: 1px solid #555;
+  color: #888;
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Minha conta" > Salas > Apelidos */
+.account-nicknames {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-nick-room {
+  flex: 0 0 130px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: #ccc;
+  font-size: 0.85rem;
+}
+.account-nick-room .dm-room-board {
+  font-size: 0.8rem;
+}
+.account-nick-row input:disabled {
+  color: #666;
+  cursor: not-allowed;
+}
+@media (max-width: 576px) {
+  .account-nick-row {
+    flex-wrap: wrap;
+  }
+  .account-nick-room {
+    flex-basis: 100%;
+  }
+  .account-nick-row input {
+    flex: 1 1 0;
+  }
+  .account-nick-row .account-btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* DASHBOARD > Apelidos */
+.owner-row-nick {
+  color: #ccc;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.owner-view .form-check-input[type="radio"] {
+  border-radius: 50%;
+}
