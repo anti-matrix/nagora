@@ -294,20 +294,53 @@ await ok("judgeAttempt: nothing succeeds past the 5th attempt or with a bad coun
 });
 
 console.log("email:");
-await ok("emailConfigured needs all three in production", () => {
-  const full = { VERCEL: "1", RESEND_API_KEY: "k", EMAIL_FROM: "f", EMAIL_CODE_SECRET: "s" };
-  assert.equal(mail.emailConfigured(full), true);
-  for (const missing of ["RESEND_API_KEY", "EMAIL_FROM", "EMAIL_CODE_SECRET"]) {
-    assert.equal(mail.emailConfigured({ ...full, [missing]: "" }), false, missing);
+const FROM = "NAGORA <no-reply@nagora.dpdns.org>";
+await ok("emailConfigured needs a provider key, a valid EMAIL_FROM and EMAIL_CODE_SECRET in production", () => {
+  for (const keyName of ["BREVO_API_KEY", "RESEND_API_KEY"]) {
+    const full = { VERCEL: "1", [keyName]: "k", EMAIL_FROM: FROM, EMAIL_CODE_SECRET: "s" };
+    assert.equal(mail.emailConfigured(full), true, keyName);
+    for (const missing of [keyName, "EMAIL_FROM", "EMAIL_CODE_SECRET"]) {
+      assert.equal(mail.emailConfigured({ ...full, [missing]: "" }), false, `${keyName} without ${missing}`);
+    }
+    assert.equal(mail.emailConfigured({ ...full, EMAIL_FROM: "NAGORA" }), false, "unparseable EMAIL_FROM");
   }
   assert.equal(mail.emailConfigured({ NODE_ENV: "production", EMAIL_CODE_SECRET: "s" }), false);
 });
-await ok("outside production only RESEND_API_KEY may be missing (console fallback)", () => {
+await ok("outside production only the provider key may be missing (console fallback)", () => {
   assert.equal(mail.emailConfigured({ EMAIL_CODE_SECRET: "s" }), true);
   assert.equal(mail.emailConfigured({}), false);
   assert.equal(mail.emailConfigured({ EMAIL_CODE_SECRET: "s", RESEND_API_KEY: "k" }), false);
+  assert.equal(mail.emailConfigured({ EMAIL_CODE_SECRET: "s", BREVO_API_KEY: "k" }), false);
   assert.equal(mail.isProduction({ VERCEL: "1" }), true);
   assert.equal(mail.isProduction({}), false);
+});
+await ok("provider: BREVO_API_KEY first, then RESEND_API_KEY, else none", () => {
+  assert.equal(mail.emailProvider({ BREVO_API_KEY: "b" }), "brevo");
+  assert.equal(mail.emailProvider({ BREVO_API_KEY: "b", RESEND_API_KEY: "r" }), "brevo");
+  assert.equal(mail.emailProvider({ RESEND_API_KEY: "r" }), "resend");
+  assert.equal(mail.emailProvider({ BREVO_API_KEY: "", RESEND_API_KEY: "r" }), "resend");
+  assert.equal(mail.emailProvider({}), null);
+});
+await ok("EMAIL_FROM parses into sender name and email", () => {
+  assert.deepEqual(mail.parseSender(FROM), { name: "NAGORA", email: "no-reply@nagora.dpdns.org" });
+  assert.deepEqual(mail.parseSender('  "NAGORA App"  <No-Reply@Nagora.dpdns.org> '), { name: "NAGORA App", email: "no-reply@nagora.dpdns.org" });
+  assert.deepEqual(mail.parseSender("no-reply@nagora.dpdns.org"), { name: "", email: "no-reply@nagora.dpdns.org" });
+  assert.deepEqual(mail.parseSender("<no-reply@nagora.dpdns.org>"), { name: "", email: "no-reply@nagora.dpdns.org" });
+  for (const bad of ["", "NAGORA", "NAGORA <>", "NAGORA <not an address>", "NAGORA <a@b>", null, undefined, 5]) {
+    assert.equal(mail.parseSender(bad), null, String(bad));
+  }
+});
+await ok("Brevo request body: sender, to, subject, htmlContent, textContent, no tracking pixel", () => {
+  const message = mail.verifyEmailMessage({ username: "ana", code: "012345" });
+  const body = mail.brevoRequestBody({ sender: mail.parseSender(FROM), to: "ana@example.com", ...message });
+  assert.deepEqual(Object.keys(body).sort(), ["htmlContent", "sender", "subject", "textContent", "to"]);
+  assert.deepEqual(body.sender, { name: "NAGORA", email: "no-reply@nagora.dpdns.org" });
+  assert.deepEqual(body.to, [{ email: "ana@example.com", removeTrackingPixel: true, contactPixelTrackingConsent: false }]);
+  assert.equal(body.subject, message.subject);
+  assert.equal(body.htmlContent, message.html);
+  assert.equal(body.textContent, message.text);
+  const bare = mail.brevoRequestBody({ sender: mail.parseSender("no-reply@nagora.dpdns.org"), to: "a@b.co", ...message });
+  assert.deepEqual(bare.sender, { email: "no-reply@nagora.dpdns.org" });
 });
 await ok("templates: pt-BR text + html, code only where expected, no images or links", () => {
   const verify = mail.verifyEmailMessage({ username: "ana<b>", code: "012345" });
