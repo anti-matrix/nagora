@@ -795,4 +795,189 @@ await ok("room nicknames: trimmed, spaces collapsed, invisible characters droppe
   assert.equal(roomsLib.NICKNAME_MAX, 20);
 });
 
+console.log("link previews:");
+const lp = await import("../lib/linkpreview.js");
+const lpf = await import("../lib/previewfetch.js");
+const dnsMod = (await import("node:dns")).default;
+const { readFileSync } = await import("node:fs");
+
+// The client repeats the URL rule between two markers; run the same cases through both.
+const clientRule = (() => {
+  const src = readFileSync(new URL("../js/UGqaIF1Z55PgcI4.js", import.meta.url), "utf8");
+  const m = src.match(/\/\/ <link-preview-rule>([\s\S]*?)\/\/ <\/link-preview-rule>/);
+  assert.ok(m, "client link preview rule markers");
+  return new Function(`${m[1]}; return firstPreviewUrl;`)();
+})();
+const firstUrlBoth = (text) => {
+  const server = lp.firstUrl(text);
+  assert.equal(clientRule(text), server, `client and server differ on ${JSON.stringify(text)}`);
+  return server;
+};
+
+await ok("firstUrl: the first URL, inside text, http and https", () => {
+  assert.equal(firstUrlBoth("olha isso https://a.com/x e https://b.com/y"), "https://a.com/x");
+  assert.equal(firstUrlBoth("http://example.com/page?q=1"), "http://example.com/page?q=1");
+  assert.equal(firstUrlBoth("antes\nhttps://a.com/p\tdepois"), "https://a.com/p");
+  assert.equal(firstUrlBoth("<https://a.com/b>"), "https://a.com/b");
+  assert.equal(firstUrlBoth("sem link aqui"), null);
+  assert.equal(firstUrlBoth("ftp://a.com/x javascript:alert(1)"), null);
+  assert.equal(firstUrlBoth("https://"), null);
+  assert.equal(firstUrlBoth(""), null);
+  assert.equal(firstUrlBoth(null), null);
+});
+await ok("firstUrl: trailing punctuation and unbalanced parentheses dropped", () => {
+  assert.equal(firstUrlBoth("veja https://a.com/x."), "https://a.com/x");
+  assert.equal(firstUrlBoth("https://a.com/x?!,;:"), "https://a.com/x");
+  assert.equal(firstUrlBoth("(veja https://a.com/x)"), "https://a.com/x");
+  assert.equal(firstUrlBoth("(https://a.com/x)."), "https://a.com/x");
+  assert.equal(firstUrlBoth("https://pt.wikipedia.org/wiki/Ágora_(Grécia)"), "https://pt.wikipedia.org/wiki/Ágora_(Grécia)");
+  assert.equal(firstUrlBoth("\"https://a.com/x\""), "https://a.com/x");
+});
+await ok("normalizePreviewUrl: http(s) only, no credentials, default ports, no fragment", () => {
+  assert.equal(lp.normalizePreviewUrl("https://A.com/x#frag"), "https://a.com/x");
+  assert.equal(lp.normalizePreviewUrl("http://a.com:80/"), "http://a.com/");
+  assert.equal(lp.normalizePreviewUrl("https://a.com:443/"), "https://a.com/");
+  for (const bad of ["ftp://a.com/", "file:///etc/passwd", "javascript:alert(1)", "data:text/html,x",
+    "https://user:pw@a.com/", "http://a.com:8080/", "https://a.com:22/", "not a url", "", null,
+    `https://a.com/${"x".repeat(2100)}`]) {
+    assert.equal(lp.normalizePreviewUrl(bad), null, String(bad).slice(0, 40));
+  }
+  // Odd IPv4 spellings are normalized by the URL parser, then checked as addresses.
+  assert.equal(new URL(lp.normalizePreviewUrl("http://0x7f000001/")).hostname, "127.0.0.1");
+  assert.equal(new URL(lp.normalizePreviewUrl("http://2130706433/")).hostname, "127.0.0.1");
+});
+await ok("isPrivateAddress: every private / reserved IPv4 range refused, public allowed", () => {
+  const priv = ["0.0.0.0", "0.1.2.3", "10.0.0.1", "10.255.255.255", "100.64.0.1", "100.127.255.255",
+    "127.0.0.1", "127.255.255.254", "169.254.169.254", "172.16.0.1", "172.31.255.255", "192.0.0.1",
+    "192.0.2.1", "192.88.99.1", "192.168.0.1", "198.18.0.1", "198.19.255.255", "198.51.100.1",
+    "203.0.113.1", "224.0.0.1", "239.255.255.255", "240.0.0.1", "255.255.255.255"];
+  for (const ip of priv) assert.equal(lp.isPrivateAddress(ip), true, ip);
+  const pub = ["8.8.8.8", "1.1.1.1", "100.63.255.255", "100.128.0.1", "172.15.255.255", "172.32.0.1",
+    "192.167.1.1", "192.169.1.1", "198.17.0.1", "198.20.0.1", "223.255.255.255"];
+  for (const ip of pub) assert.equal(lp.isPrivateAddress(ip), false, ip);
+});
+await ok("isPrivateAddress: IPv6 loopback, ULA, link-local, multicast, mapped, NAT64, 6to4, docs refused", () => {
+  const priv = ["::", "::1", "0:0:0:0:0:0:0:1", "fc00::1", "fd12:3456::1", "fe80::1", "fe80::1%eth0",
+    "febf::1", "fec0::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:10.0.0.1",
+    "::ffff:169.254.169.254", "::127.0.0.1", "64:ff9b::7f00:1", "100::1", "2001::1", "2001:db8::1",
+    "2002:7f00:1::1", "3fff::1", "garbage", "", null, "1.2.3"];
+  for (const ip of priv) assert.equal(lp.isPrivateAddress(ip), true, String(ip));
+  for (const ip of ["2606:4700:4700::1111", "2001:4860:4860::8888", "2a03:2880::1", "::ffff:8.8.8.8"]) {
+    assert.equal(lp.isPrivateAddress(ip), false, ip);
+  }
+  assert.deepEqual(lp.expandIPv6("::ffff:1.2.3.4"), [0, 0, 0, 0, 0, 0xffff, 0x0102, 0x0304]);
+  assert.equal(lp.expandIPv6("1::2::3"), null);
+});
+await ok("guardedLookup: a name with any private address is refused (checked at connect time)", async () => {
+  const realLookup = dnsMod.lookup;
+  const answers = {
+    "public.test": [{ address: "93.184.215.14", family: 4 }],
+    "rebind.test": [{ address: "93.184.215.14", family: 4 }, { address: "127.0.0.1", family: 4 }],
+    "v6local.test": [{ address: "::1", family: 6 }],
+  };
+  dnsMod.lookup = (host, opts, cb) => cb(null, answers[host] || []);
+  try {
+    const run = (host, opts) => new Promise(resolve => lpf.guardedLookup(host, opts, (err, a, f) => resolve({ err, a, f })));
+    const one = await run("public.test", {});
+    assert.equal(one.err, null);
+    assert.equal(one.a, "93.184.215.14");
+    assert.equal(one.f, 4);
+    const all = await run("public.test", { all: true });
+    assert.deepEqual(all.a, answers["public.test"]);
+    for (const host of ["rebind.test", "v6local.test", "nothing.test"]) {
+      const r = await run(host, {});
+      assert.ok(r.err instanceof lpf.PreviewBlockedError, host);
+    }
+  } finally {
+    dnsMod.lookup = realLookup;
+  }
+});
+await ok("fetchPage: literal private addresses refused before any connection", async () => {
+  for (const u of ["http://127.0.0.1/", "http://[::1]/", "http://169.254.169.254/latest/", "http://0x7f000001/", "http://10.1.2.3/"]) {
+    await assert.rejects(lpf.fetchPage(u), (e) => e instanceof lpf.PreviewBlockedError, u);
+  }
+  await assert.rejects(lpf.fetchPage("file:///etc/passwd"), /invalid url/);
+});
+await ok("detectProvider: YouTube, Spotify, X, Last.fm, Instagram, generic", () => {
+  const d = lp.detectProvider;
+  assert.deepEqual(d("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
+  assert.deepEqual(d("https://youtu.be/dQw4w9WgXcQ?si=x"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
+  assert.deepEqual(d("https://m.youtube.com/shorts/dQw4w9WgXcQ"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
+  assert.deepEqual(d("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
+  assert.deepEqual(d("https://www.youtube.com/@RickAstleyYT"), { provider: "generic", site: "youtube" });
+  for (const kind of ["track", "album", "playlist", "artist", "episode", "show"]) {
+    assert.deepEqual(d(`https://open.spotify.com/${kind}/4cOdK2wGLETKBW3PvgPWqT?si=1`), { provider: "spotify", kind, id: "4cOdK2wGLETKBW3PvgPWqT" });
+  }
+  assert.deepEqual(d("https://open.spotify.com/intl-pt/track/4cOdK2wGLETKBW3PvgPWqT"), { provider: "spotify", kind: "track", id: "4cOdK2wGLETKBW3PvgPWqT" });
+  assert.deepEqual(d("https://open.spotify.com/user/abc"), { provider: "generic", site: "spotify" });
+  assert.deepEqual(d("https://x.com/jack/status/20"), { provider: "x", statusId: "20" });
+  assert.deepEqual(d("https://twitter.com/jack/status/20?s=20"), { provider: "x", statusId: "20" });
+  assert.deepEqual(d("https://mobile.twitter.com/jack"), { provider: "x", handle: "jack" });
+  assert.deepEqual(d("https://x.com/explore"), { provider: "generic", site: "x" });
+  assert.deepEqual(d("https://x.com/search?q=a"), { provider: "generic", site: "x" });
+  assert.deepEqual(d("https://www.last.fm/music/Radiohead"), { provider: "lastfm" });
+  assert.deepEqual(d("https://www.instagram.com/p/C0Yc3_xLVz1/"), { provider: "instagram" });
+  assert.deepEqual(d("https://g1.globo.com/politica/"), { provider: "generic" });
+  assert.deepEqual(d("https://notyoutube.com/watch?v=dQw4w9WgXcQ"), { provider: "generic" });
+  assert.deepEqual(d("https://x.com.evil.test/jack/status/1"), { provider: "generic" });
+  assert.equal(lp.youtubeOembedUrl("dQw4w9WgXcQ"),
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ&format=json");
+  assert.equal(lp.spotifyOembedUrl("track", "4cOdK2wGLETKBW3PvgPWqT"),
+    "https://open.spotify.com/oembed?url=https%3A%2F%2Fopen.spotify.com%2Ftrack%2F4cOdK2wGLETKBW3PvgPWqT");
+});
+await ok("parseOpenGraph: og tags, attribute order, entities, relative image", () => {
+  const html = `<!doctype html><html><head>
+    <meta charset="utf-8"><title>Fallback title</title>
+    <meta content="Notícia &amp; mais" property="og:title" data-x>
+    <meta property='og:description' content='Uma descrição &quot;longa&quot; &#233; &#x1F600;'>
+    <meta property="og:site_name"     content="Jornal">
+    <meta property="og:image" content="/img/capa.jpg" />
+    <meta name="description" content="ignored when og:description exists">
+  </head><body><meta property="og:title" content="body tag ignored"></body></html>`;
+  assert.deepEqual(lp.parseOpenGraph(html, "https://jornal.test/a/b"), {
+    siteName: "Jornal",
+    title: "Notícia & mais",
+    description: "Uma descrição \"longa\" é 😀",
+    image: "https://jornal.test/img/capa.jpg",
+  });
+});
+await ok("parseOpenGraph: without og tags falls back to twitter:*, <title>, meta description", () => {
+  const tw = `<head><meta name="twitter:title" content="Tw title"><meta name="twitter:image:src" content="https://cdn.test/i.png"></head>`;
+  assert.deepEqual(lp.parseOpenGraph(tw, "https://a.test/"), { siteName: null, title: "Tw title", description: null, image: "https://cdn.test/i.png" });
+  const plain = `<html><head><title>
+    Só o título </title><meta name="Description" content="Descrição simples"></head></html>`;
+  const p = lp.parseOpenGraph(plain, "https://a.test/");
+  assert.equal(p.description, "Descrição simples");
+  assert.equal(lp.previewResult({ url: "https://a.test/", ...p, provider: "generic" }).title, "Só o título");
+  assert.deepEqual(lp.parseOpenGraph("<p>nada</p>", "https://a.test/"), { siteName: null, title: null, description: null, image: null });
+  assert.equal(lp.metaCharset('<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">'), "iso-8859-1");
+  assert.equal(lp.metaCharset("<meta charset='windows-1252'>"), "windows-1252");
+});
+await ok("previewResult: normalized shape, text cleaned and clipped, image http(s) only", () => {
+  const r = lp.previewResult({
+    url: "https://a.test/", siteName: "  Site​  ", title: "a\n\n b‮", description: "d".repeat(400),
+    image: "javascript:alert(1)", provider: "weird",
+  });
+  assert.deepEqual(Object.keys(r), ["url", "siteName", "title", "description", "image", "provider"]);
+  assert.equal(r.siteName, "Site");
+  assert.equal(r.title, "a b");
+  assert.equal([...r.description].length, 300);
+  assert.ok(r.description.endsWith("…"));
+  assert.equal(r.image, null);
+  assert.equal(r.provider, "generic");
+  for (const bad of ["data:image/png;base64,AA", "file:///x.png", "//cdn.test/x.png", 42]) {
+    assert.equal(lp.previewResult({ url: "u", image: bad }).image, null, String(bad));
+  }
+  assert.equal(lp.previewResult({ url: "u", image: "http://cdn.test/x.png" }).image, "http://cdn.test/x.png");
+  assert.deepEqual(lp.previewResult({ url: "https://www.instagram.com/p/x/", siteName: "Instagram", provider: "instagram" }),
+    { url: "https://www.instagram.com/p/x/", siteName: "Instagram", title: null, description: null, image: null, provider: "instagram" });
+  assert.equal(lp.hasContent(lp.previewResult({ url: "u", siteName: "S" })), false);
+  assert.equal(lp.hostLabel("https://www.example.com/x"), "example.com");
+  assert.match(lp.previewCacheId("https://a.test/"), /^[0-9a-f]{64}$/);
+  assert.equal(lpf.LP_PREFIX, "ngr:lp:");
+  assert.equal(lp.PREVIEW_TTL_SECONDS, 86400);
+  assert.equal(lp.PREVIEW_FAIL_TTL_SECONDS, 3600);
+  assert.deepEqual(rl.LIMITS.linkPreview, { name: "link-preview", limit: 30, windowMs: 60000 });
+});
+
 console.log(`\nAll ${passed} tests passed.`);
