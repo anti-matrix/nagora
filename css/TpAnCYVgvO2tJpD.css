@@ -3537,3 +3537,57 @@ body {
 .owner-view .form-check-input[type="radio"] {
   border-radius: 50%;
 }
+
+/* Link previews under DM and room messages: the integration card look
+   (.integration-card / -head / -label / -title / -sub / -art) */
+.link-preview-slot {
+  margin-top: 6px;
+}
+.link-preview-slot[hidden] {
+  display: none !important;
+}
+.link-preview {
+  width: 320px;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.link-preview:hover,
+.link-preview:focus {
+  color: inherit;
+}
+.link-preview:focus-visible {
+  outline: 1px solid #888;
+  outline-offset: 2px;
+}
+.link-preview-title,
+.link-preview-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* Undo the message-image rule (.dm-bubble img) inside a card */
+.dm-bubble .link-preview img.link-preview-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  border: 1px solid #333;
+  border-radius: 0;
+  margin: 0;
+}
+.dm-bubble .link-preview img.integration-art {
+  width: 48px;
+  height: 48px;
+  aspect-ratio: auto;
+  border-radius: 0;
+  margin: 0;
+}
+@media (hover: hover) {
+  .link-preview:hover .link-preview-title {
+    text-decoration: underline;
+  }
+}

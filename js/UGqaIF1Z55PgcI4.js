@@ -1333,6 +1333,143 @@ function appendLinkifiedText(text, parent) {
   if (tail) parent.appendChild(document.createTextNode(tail));
 }
 
+// ── Link previews ───────────────────────────────────────────────────────
+// A card under a DM or room message for its first URL, computed on display
+// (messages are never changed). /api/preview returns { url, siteName, title,
+// description, image, provider } or null; every text goes in with textContent
+// and images load from the source host with no referrer.
+// The rule between the markers is the same as firstUrl in lib/linkpreview.js;
+// the smoke test runs both on the same cases.
+// <link-preview-rule>
+const PREVIEW_URL_RE = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/i;
+function trimPreviewUrlTail(url) {
+  let u = url;
+  for (;;) {
+    const before = u;
+    u = u.replace(/[.,;:!?'"*]+$/, "");
+    if (u.endsWith(")") && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length) u = u.slice(0, -1);
+    if (u === before) return u;
+  }
+}
+function firstPreviewUrl(text) {
+  if (typeof text !== "string" || !text) return null;
+  const m = PREVIEW_URL_RE.exec(text);
+  if (!m) return null;
+  const url = trimPreviewUrlTail(m[0]);
+  return /^https?:\/\/[^/?#]+/i.test(url) ? url : null;
+}
+// </link-preview-rule>
+
+const LINK_PREVIEW_ICONS = {
+  youtube: "bi-youtube", spotify: "bi-spotify", x: "bi-twitter", lastfm: "bi-vinyl-fill",
+  instagram: "bi-instagram", generic: "bi-link-45deg",
+};
+const LINK_PREVIEW_RETRY_MS = 60000;   // after a 429 or a network error
+const LINK_PREVIEW_CACHE_MAX = 500;
+const linkPreviews = new Map();        // url → { state: "loading" | "done" | "retry", preview, retryAt }
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./i, ""); } catch { return ""; }
+}
+
+/** https as is; http upgraded (the app is https, so the browser would upgrade it anyway). */
+function previewImageUrl(url) {
+  if (typeof url !== "string") return null;
+  if (url.startsWith("https://")) return url;
+  if (url.startsWith("http://")) return `https://${url.slice(7)}`;
+  return null;
+}
+
+/** Cover art and avatars go small beside the text, like the integration cards. */
+function previewImageIsSquare(p) {
+  return p.provider === "spotify" || p.provider === "lastfm"
+    || (p.provider === "x" && /\/profile_images\//.test(p.image || ""));
+}
+
+function linkPreviewCard(p) {
+  const card = el("a", `integration-card link-preview link-preview-${p.provider}`);
+  card.href = p.url;
+  card.target = "_blank";
+  card.rel = "noopener noreferrer";
+  card.addEventListener("click", (e) => e.stopPropagation());
+
+  const head = el("div", "integration-head");
+  const icon = el("i", `bi ${LINK_PREVIEW_ICONS[p.provider] || LINK_PREVIEW_ICONS.generic}`);
+  icon.setAttribute("aria-hidden", "true");
+  head.append(icon, el("span", "integration-label", p.siteName || hostOf(p.url)));
+  card.appendChild(head);
+
+  const text = el("div", "integration-text");
+  if (p.title) text.appendChild(el("div", "integration-title link-preview-title", p.title));
+  if (p.description) text.appendChild(el("div", "integration-sub link-preview-desc", p.description));
+
+  const imageUrl = previewImageUrl(p.image);
+  if (imageUrl && previewImageIsSquare(p)) {
+    const body = el("div", "integration-body");
+    const art = externalImage(imageUrl, "integration-art");
+    if (art) body.appendChild(art);
+    body.appendChild(text);
+    card.appendChild(body);
+  } else {
+    if (text.childElementCount) card.appendChild(text);
+    const wide = imageUrl ? externalImage(imageUrl, "link-preview-image") : null;
+    if (wide) card.appendChild(wide);
+  }
+  return card;
+}
+
+function fillLinkPreviewSlot(slot, preview) {
+  slot.innerHTML = "";
+  if (preview) slot.appendChild(linkPreviewCard(preview));
+  slot.hidden = !preview;
+}
+
+async function loadLinkPreview(url) {
+  linkPreviews.set(url, { state: "loading" });
+  if (linkPreviews.size > LINK_PREVIEW_CACHE_MAX) linkPreviews.delete(linkPreviews.keys().next().value);
+  let entry;
+  try {
+    const r = await authFetch(`/api/preview?url=${encodeURIComponent(url)}`, { credentials: "include" });
+    if (r.ok) {
+      const data = await r.json();
+      entry = { state: "done", preview: data.preview || null };
+    } else if (r.status === 400) {
+      entry = { state: "done", preview: null };
+    } else {
+      entry = { state: "retry", retryAt: Date.now() + LINK_PREVIEW_RETRY_MS };
+    }
+  } catch (e) {
+    console.warn("[app] link preview:", e);
+    entry = { state: "retry", retryAt: Date.now() + LINK_PREVIEW_RETRY_MS };
+  }
+  linkPreviews.set(url, entry);
+  if (entry.state !== "done" || !entry.preview) return;
+  // The list may have been re-rendered (or switched) meanwhile: fill whatever slots wait for this URL now.
+  const nearBottom = dmMessages.scrollHeight - dmMessages.scrollTop - dmMessages.clientHeight <= NEAR_BOTTOM_THRESHOLD;
+  let filled = false;
+  for (const slot of dmMessages.querySelectorAll(".link-preview-slot")) {
+    if (slot.dataset.url !== url) continue;
+    fillLinkPreviewSlot(slot, entry.preview);
+    filled = true;
+  }
+  if (filled && nearBottom) dmMessages.scrollTop = dmMessages.scrollHeight;
+}
+
+/** A (hidden until filled) slot under the message text for the first URL in `text`. */
+function appendLinkPreview(bubble, text) {
+  const url = firstPreviewUrl(text);
+  if (!url) return;
+  const slot = el("div", "link-preview-slot");
+  slot.dataset.url = url;
+  slot.hidden = true;
+  bubble.appendChild(slot);
+  const entry = linkPreviews.get(url);
+  if (entry?.state === "done") return fillLinkPreviewSlot(slot, entry.preview);
+  if (entry?.state === "loading") return;
+  if (entry?.state === "retry" && Date.now() < entry.retryAt) return;
+  loadLinkPreview(url);
+}
+
 async function initSession() {
   try {
     const r = await fetch("/api/handshake", { credentials: "include" });
@@ -2597,6 +2734,7 @@ function renderMessages(options = {}) {
       text.className = "dm-bubble-text";
       appendLinkifiedText(m.content, text);
       bubble.appendChild(text);
+      appendLinkPreview(bubble, m.content);
     }
 
     const meta = document.createElement("div");
@@ -3822,7 +3960,7 @@ dmAudio.addEventListener("contextmenu", (e) => e.preventDefault());
 // Open lightbox when any image inside a bubble is clicked.
 dmMessages.addEventListener("click", (e) => {
   const img = e.target.closest(".dm-bubble img");
-  if (!img || img.closest(".dm-video-wrap")) return;
+  if (!img || img.closest(".dm-video-wrap") || img.closest(".link-preview")) return;
   const bubble = img.closest(".dm-bubble");
   const messageId = bubble?.dataset.id;
   if (!messageId) return;
@@ -5054,6 +5192,7 @@ function renderRoomMessages(options = {}) {
       text.className = "dm-bubble-text";
       appendLinkifiedText(m.content, text);
       bubble.appendChild(text);
+      appendLinkPreview(bubble, m.content);
     }
 
     const meta = document.createElement("div");
