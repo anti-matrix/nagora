@@ -15,6 +15,7 @@ import meHandler from "../lib/handlers/me.js";
 import mediaHandler from "../lib/handlers/media.js";
 import messagesHandler from "../lib/handlers/messages.js";
 import ownerHandler from "../lib/handlers/owner.js";
+import previewHandler from "../lib/handlers/preview.js";
 import presenceHandler from "../lib/handlers/presence.js";
 import recoverHandler from "../lib/handlers/recover.js";
 import roomsHandler from "../lib/handlers/rooms.js";
@@ -43,6 +44,7 @@ const handlers = {
   messages: messagesHandler,
   owner: ownerHandler,
   presence: presenceHandler,
+  preview: previewHandler,
   recover: recoverHandler,
   rooms: roomsHandler,
   shell: shellHandler,
