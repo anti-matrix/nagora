@@ -12,5 +12,15 @@ __pycache__/
 # opencode project memory — local only, never commit
 .opencode/
 
+# Claude project context + work log — local only, never commit
+CLAUDE.md
+docs/WORKLOG.md
+
 # Test scripts
 *.test.mjs
+
+# Vercel CLI link (local only)
+.vercel/
+
+.vercel
+.env*
