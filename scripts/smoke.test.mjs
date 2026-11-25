@@ -898,7 +898,7 @@ await ok("fetchPage: literal private addresses refused before any connection", a
   }
   await assert.rejects(lpf.fetchPage("file:///etc/passwd"), /invalid url/);
 });
-await ok("detectProvider: YouTube, Spotify, X, Last.fm, Instagram, generic", () => {
+await ok("detectProvider: YouTube, Spotify, X, Last.fm, Instagram, Telegram, generic", () => {
   const d = lp.detectProvider;
   assert.deepEqual(d("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
   assert.deepEqual(d("https://youtu.be/dQw4w9WgXcQ?si=x"), { provider: "youtube", videoId: "dQw4w9WgXcQ" });
@@ -917,6 +917,9 @@ await ok("detectProvider: YouTube, Spotify, X, Last.fm, Instagram, generic", () 
   assert.deepEqual(d("https://x.com/search?q=a"), { provider: "generic", site: "x" });
   assert.deepEqual(d("https://www.last.fm/music/Radiohead"), { provider: "lastfm" });
   assert.deepEqual(d("https://www.instagram.com/p/C0Yc3_xLVz1/"), { provider: "instagram" });
+  assert.deepEqual(d("https://t.me/durov"), { provider: "telegram" });
+  assert.deepEqual(d("https://telegram.me/telegram/1"), { provider: "telegram" });
+  assert.deepEqual(d("https://t.me.evil.test/durov"), { provider: "generic" });
   assert.deepEqual(d("https://g1.globo.com/politica/"), { provider: "generic" });
   assert.deepEqual(d("https://notyoutube.com/watch?v=dQw4w9WgXcQ"), { provider: "generic" });
   assert.deepEqual(d("https://x.com.evil.test/jack/status/1"), { provider: "generic" });
@@ -953,7 +956,7 @@ await ok("parseOpenGraph: without og tags falls back to twitter:*, <title>, meta
   assert.equal(lp.metaCharset('<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">'), "iso-8859-1");
   assert.equal(lp.metaCharset("<meta charset='windows-1252'>"), "windows-1252");
 });
-await ok("previewResult: normalized shape, text cleaned and clipped, image http(s) only", () => {
+await ok("previewResult: normalized shape, text cleaned and clipped, image from allowed hosts only", () => {
   const r = lp.previewResult({
     url: "https://a.test/", siteName: "  Site​  ", title: "a\n\n b‮", description: "d".repeat(400),
     image: "javascript:alert(1)", provider: "weird",
@@ -968,7 +971,8 @@ await ok("previewResult: normalized shape, text cleaned and clipped, image http(
   for (const bad of ["data:image/png;base64,AA", "file:///x.png", "//cdn.test/x.png", 42]) {
     assert.equal(lp.previewResult({ url: "u", image: bad }).image, null, String(bad));
   }
-  assert.equal(lp.previewResult({ url: "u", image: "http://cdn.test/x.png" }).image, "http://cdn.test/x.png");
+  assert.equal(lp.previewResult({ url: "u", image: "https://i.ytimg.com/vi/x/hqdefault.jpg" }).image, "https://i.ytimg.com/vi/x/hqdefault.jpg");
+  assert.equal(lp.previewResult({ url: "u", image: "https://cdn.test/x.png" }).image, null);
   assert.deepEqual(lp.previewResult({ url: "https://www.instagram.com/p/x/", siteName: "Instagram", provider: "instagram" }),
     { url: "https://www.instagram.com/p/x/", siteName: "Instagram", title: null, description: null, image: null, provider: "instagram" });
   assert.equal(lp.hasContent(lp.previewResult({ url: "u", siteName: "S" })), false);
@@ -978,6 +982,38 @@ await ok("previewResult: normalized shape, text cleaned and clipped, image http(
   assert.equal(lp.PREVIEW_TTL_SECONDS, 86400);
   assert.equal(lp.PREVIEW_FAIL_TTL_SECONDS, 3600);
   assert.deepEqual(rl.LIMITS.linkPreview, { name: "link-preview", limit: 30, windowMs: 60000 });
+});
+await ok("preview images: only known platform and news hosts, https, no tricks", () => {
+  const good = [
+    "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "https://yt3.ggpht.com/a.jpg",
+    "https://i.scdn.co/image/ab67", "https://image-cdn-ak.spotifycdn.com/image/ab67",
+    "https://pbs.twimg.com/media/x.jpg", "https://lastfm-img.freetls.fastly.net/i/u/ar0/a.jpg",
+    "https://cdn4.telesco.pe/file/a.jpg", "https://i.imgur.com/a.png", "https://upload.wikimedia.org/a.png",
+    "https://s2-g1.glbimg.com/a.jpg", "https://conteudo.imguol.com.br/a.jpg", "https://f.i.uol.com.br/a.jpg",
+    "https://i.metroimg.com/a.webp", "https://ichef.bbci.co.uk/a.jpg", "https://i.guim.co.uk/a.jpg",
+    "https://static01.nyt.com/a.jpg", "https://imagenes.elpais.com/a.png", "https://I.YTIMG.COM./a.jpg",
+  ];
+  for (const u of good) assert.ok(lp.safeImageUrl(u), u);
+  const bad = [
+    "http://i.ytimg.com/a.jpg",                 // https only
+    "https://evil.test/a.jpg",                  // unknown host
+    "https://ytimg.com.evil.test/a.jpg",        // suffix trick
+    "https://evilytimg.com/a.jpg",              // no dot boundary
+    "https://storage.googleapis.com/b/a.png",   // shared bucket host
+    "https://freetls.fastly.net/a.png",         // shared CDN, only Last.fm's hosts
+    "https://x.uol.com.br/a.jpg",               // only f.i.uol.com.br and imguol.com.br
+    "https://user:pw@i.ytimg.com/a.jpg", "https://i.ytimg.com:8443/a.jpg",
+    "https://lh3.googleusercontent.com.evil.test/a.jpg", "javascript:alert(1)", null,
+  ];
+  for (const u of bad) assert.equal(lp.safeImageUrl(u), null, String(u));
+  assert.equal(lp.isPreviewImageHost("evil.test"), false);
+  assert.equal(lp.isPreviewImageHost(""), false);
+  // No shared hosting domain may ever sneak into the list.
+  for (const shared of ["googleapis.com", "storage.googleapis.com", "amazonaws.com", "akamaihd.net", "arc.pub",
+    "fastly.net", "freetls.fastly.net", "cloudfront.net", "wordpress.com", "github.io", "vercel.app", "netlify.app",
+    "pages.dev", "googleusercontent.com", "githubusercontent.com", "blogspot.com", "uol.com.br"]) {
+    assert.ok(!lp.PREVIEW_IMAGE_HOSTS.includes(shared), shared);
+  }
 });
 
 console.log(`\nAll ${passed} tests passed.`);

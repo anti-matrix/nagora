@@ -1362,7 +1362,7 @@ function firstPreviewUrl(text) {
 
 const LINK_PREVIEW_ICONS = {
   youtube: "bi-youtube", spotify: "bi-spotify", x: "bi-twitter", lastfm: "bi-vinyl-fill",
-  instagram: "bi-instagram", generic: "bi-link-45deg",
+  instagram: "bi-instagram", telegram: "bi-telegram", generic: "bi-link-45deg",
 };
 const LINK_PREVIEW_RETRY_MS = 60000;   // after a 429 or a network error
 const LINK_PREVIEW_CACHE_MAX = 500;
@@ -1382,7 +1382,7 @@ function previewImageUrl(url) {
 
 /** Cover art and avatars go small beside the text, like the integration cards. */
 function previewImageIsSquare(p) {
-  return p.provider === "spotify" || p.provider === "lastfm"
+  return p.provider === "spotify" || p.provider === "lastfm" || p.provider === "telegram"
     || (p.provider === "x" && /\/profile_images\//.test(p.image || ""));
 }
 
