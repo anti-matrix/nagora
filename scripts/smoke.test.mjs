@@ -980,7 +980,7 @@ await ok("previewResult: normalized shape, text cleaned and clipped, image from 
     url: "https://a.test/", siteName: "  Site​  ", title: "a\n\n b‮", description: "d".repeat(400),
     image: "javascript:alert(1)", provider: "weird",
   });
-  assert.deepEqual(Object.keys(r), ["url", "siteName", "title", "description", "image", "provider"]);
+  assert.deepEqual(Object.keys(r), ["url", "siteName", "title", "author", "description", "image", "provider", "publishedAt", "video", "color"]);
   assert.equal(r.siteName, "Site");
   assert.equal(r.title, "a b");
   assert.equal([...r.description].length, 300);
@@ -993,7 +993,8 @@ await ok("previewResult: normalized shape, text cleaned and clipped, image from 
   assert.equal(lp.previewResult({ url: "u", image: "https://i.ytimg.com/vi/x/hqdefault.jpg" }).image, "https://i.ytimg.com/vi/x/hqdefault.jpg");
   assert.equal(lp.previewResult({ url: "u", image: "https://cdn.test/x.png" }).image, null);
   assert.deepEqual(lp.previewResult({ url: "https://www.instagram.com/p/x/", siteName: "Instagram", provider: "instagram" }),
-    { url: "https://www.instagram.com/p/x/", siteName: "Instagram", title: null, description: null, image: null, provider: "instagram" });
+    { url: "https://www.instagram.com/p/x/", siteName: "Instagram", title: null, author: null, description: null, image: null,
+      provider: "instagram", publishedAt: null, video: false, color: null });
   assert.equal(lp.hasContent(lp.previewResult({ url: "u", siteName: "S" })), false);
   assert.equal(lp.hostLabel("https://www.example.com/x"), "example.com");
   assert.match(lp.previewCacheId("https://a.test/"), /^[0-9a-f]{64}$/);
@@ -1033,6 +1034,84 @@ await ok("preview images: only known platform and news hosts, https, no tricks",
     "pages.dev", "googleusercontent.com", "githubusercontent.com", "blogspot.com", "uol.com.br"]) {
     assert.ok(!lp.PREVIEW_IMAGE_HOSTS.includes(shared), shared);
   }
+});
+
+await ok("previewResult: author, date, video and color are checked like the rest", () => {
+  const r = lp.previewResult({
+    url: "u", author: "  Rádio\u200b  Nova ", publishedAt: "2026-11-20T10:00:00-03:00", video: "yes", color: "#ABC",
+  });
+  assert.equal(r.author, "Rádio Nova");
+  assert.equal(r.publishedAt, "2026-11-20T13:00:00.000Z");
+  assert.equal(r.video, false, "only a real true counts");
+  assert.equal(r.color, "#aabbcc");
+  assert.equal(lp.previewResult({ url: "u", video: true }).video, true);
+  for (const bad of ["red", "rgb(1,2,3)", "#12345", "#ggg", "url(https://a.test/x)", "#fff;background:url(x)", 7]) {
+    assert.equal(lp.previewResult({ url: "u", color: bad }).color, null, String(bad));
+  }
+  for (const bad of ["https://jornal.test/autor/x", "//a.test/b", "www.a.test", "", "   "]) {
+    assert.equal(lp.previewResult({ url: "u", author: bad }).author, null, bad);
+  }
+  assert.equal(lp.previewResult({ url: "u", author: "a".repeat(200) }).author.length, 80);
+  const now = Date.UTC(2026, 10, 26);
+  assert.equal(lp.safePublishedAt("1980-01-01", now), null);
+  assert.equal(lp.safePublishedAt("2026-12-30", now), null, "more than a day ahead");
+  assert.equal(lp.safePublishedAt("ontem", now), null);
+  assert.equal(lp.safePublishedAt(Date.UTC(2026, 0, 2), now), "2026-01-02T00:00:00.000Z");
+});
+await ok("parseMetaTags / pageExtras: author, published time, video, theme-color", () => {
+  const html = `<head>
+    <meta name="author" content="Fulana de Tal"><meta property="article:author" content="https://site.test/autor">
+    <meta property="article:published_time" content="2026-11-25T08:30:00Z">
+    <meta property="og:type" content="video.other"><meta name="theme-color" content="#C4170C">
+  </head><body><meta name="author" content="ignored"></body>`;
+  const meta = lp.parseMetaTags(html);
+  assert.equal(meta.author, "Fulana de Tal");
+  assert.deepEqual(lp.pageExtras(meta), { author: "Fulana de Tal", publishedAt: "2026-11-25T08:30:00.000Z", video: true, color: "#c4170c" });
+  // A URL author falls back to nothing; twitter:card player and og:video mark a video.
+  assert.deepEqual(lp.pageExtras(lp.parseMetaTags('<meta property="article:author" content="https://a.test/u"><meta name="twitter:card" content="player">')),
+    { author: null, publishedAt: null, video: true, color: null });
+  assert.equal(lp.pageExtras(lp.parseMetaTags('<meta property="og:video:secure_url" content="https://v.test/a.mp4">')).video, true);
+  assert.deepEqual(lp.pageExtras({}), { author: null, publishedAt: null, video: false, color: null });
+  // parseOpenGraph still returns only its four fields.
+  assert.deepEqual(Object.keys(lp.parseOpenGraph(html, "https://a.test/")), ["siteName", "title", "description", "image"]);
+});
+await ok("spotifyDetails: artist and year for tracks and albums, page text for artists and playlists", () => {
+  const track = lp.parseMetaTags(`<head><meta property="og:description" content="Radiohead · Pablo Honey · Song · 1993">
+    <meta name="music:musician_description" content="Radiohead"><meta name="music:release_date" content="1993-02-22"></head>`);
+  assert.deepEqual(lp.spotifyDetails("track", track), { author: "Radiohead", description: "Música · 1993" });
+  // Without music:musician_description the artist is the first part of og:description.
+  assert.deepEqual(lp.spotifyDetails("album", { "og:description": "Tim Maia · Album · 1971 · 12 songs." }),
+    { author: "Tim Maia", description: "Álbum" });
+  assert.deepEqual(lp.spotifyDetails("track", {}), { author: null, description: "Música" });
+  assert.deepEqual(lp.spotifyDetails("track", { "og:description": "Ouça no Spotify." }), { author: null, description: "Música" });
+  assert.deepEqual(lp.spotifyDetails("artist", { "og:description": "Artista · 1,2 mi ouvintes mensais." }),
+    { author: null, description: "Artista · 1,2 mi ouvintes mensais." });
+  assert.deepEqual(lp.spotifyDetails("playlist", null), { author: null, description: "Playlist" });
+  assert.deepEqual(lp.spotifyDetails("episode", { "music:release_date": "2025-03-01" }), { author: null, description: "Episódio · 2025" });
+  // A URL never becomes the artist.
+  assert.equal(lp.spotifyDetails("track", { "music:musician_description": "https://open.spotify.com/artist/x" }).author, null);
+});
+await ok("previewCacheId: versioned, so entries in the old shape are not served", () => {
+  const old = createHash("sha256").update("https://a.test/").digest("hex");
+  assert.notEqual(lp.previewCacheId("https://a.test/"), old);
+  assert.equal(lp.previewCacheId("https://a.test/"),
+    createHash("sha256").update(`${lp.PREVIEW_CACHE_VERSION} https://a.test/`).digest("hex"));
+});
+
+console.log("captions:");
+const msgs = await import("../lib/messages.js");
+await ok("parseCaption: trimmed text, empty for none, refused over 2000 characters", () => {
+  assert.deepEqual(msgs.parseCaption("  olha isso \n "), { valid: true, text: "olha isso" });
+  for (const none of [undefined, null, "", "   ", 42, {}, ["x"]]) {
+    assert.deepEqual(msgs.parseCaption(none), { valid: true, text: "" }, String(none));
+  }
+  assert.equal(msgs.CAPTION_MAX_LENGTH, 2000);
+  assert.deepEqual(msgs.parseCaption("a".repeat(2000)), { valid: true, text: "a".repeat(2000) });
+  assert.deepEqual(msgs.parseCaption("a".repeat(2001)), { valid: false, text: "" });
+  assert.deepEqual(msgs.parseCaption(`  ${"a".repeat(2000)}  `).valid, true, "counted after trimming");
+  // The client field allows the same length.
+  const src = readFileSync(new URL("../js/UGqaIF1Z55PgcI4.js", import.meta.url), "utf8");
+  assert.match(src, /id="img-preview-caption"[^>]*maxlength="2000"/);
 });
 
 console.log(`\nAll ${passed} tests passed.`);

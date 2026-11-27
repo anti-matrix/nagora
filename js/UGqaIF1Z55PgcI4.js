@@ -119,6 +119,7 @@
                     </div>
                 </div>
                 <p id="img-preview-info"></p>
+                <textarea class="img-preview-caption" id="img-preview-caption" rows="2" maxlength="2000" data-str-placeholder="imgCaptionPlaceholder" data-str-label="imgCaptionLabel" hidden></textarea>
                 <div class="img-crop-presets" id="img-crop-presets" role="group" data-str-label="imgCropRatio" hidden></div>
                 <p class="img-preview-error" id="img-preview-error" role="alert"></p>
                 <div class="logout-confirm-actions" id="img-preview-actions">
@@ -216,6 +217,7 @@
       <button type="button" class="dm-lightbox-nav dm-lightbox-prev" id="dm-lightbox-prev" aria-label="Imagem anterior" hidden><i class="bi bi-chevron-left"></i></button>
       <button type="button" class="dm-lightbox-nav dm-lightbox-next" id="dm-lightbox-next" aria-label="Próxima imagem" hidden><i class="bi bi-chevron-right"></i></button>
       <img id="dm-lightbox-img" alt="Imagem ampliada" />
+      <div class="dm-lightbox-caption" id="dm-lightbox-caption" hidden></div>
       <div class="dm-lightbox-thumbs" id="dm-lightbox-thumbs"></div>
     </div>
 
@@ -699,6 +701,10 @@ const STRINGS = {
   imgServerTooBig: "A imagem passou do limite de 1 MB.",
   imgUnsupported: "Formato de imagem não suportado.",
   imgSendFailed: "Falha ao enviar a imagem. Tente novamente.",
+  imgCaptionPlaceholder: "Adicionar legenda…",
+  imgCaptionLabel: "Legenda da imagem",
+  imgCaptionTooLong: "Legenda muito longa (máx. 2000 caracteres).",
+  snippetImage: "(imagem)",
 
   // Account dashboard: "Conexões" (Last.fm, Steam, X; Spotify through Last.fm)
   connTitle: "Conexões",
@@ -1015,6 +1021,7 @@ const dmLightboxClose = document.getElementById("dm-lightbox-close");
 const dmLightboxPrev = document.getElementById("dm-lightbox-prev");
 const dmLightboxNext = document.getElementById("dm-lightbox-next");
 const dmLightboxThumbs = document.getElementById("dm-lightbox-thumbs");
+const dmLightboxCaption = document.getElementById("dm-lightbox-caption");
 
 let lightboxImageIndex = -1;
 let lightboxImageSource = null;
@@ -1076,6 +1083,7 @@ const imgCropWrap = document.getElementById("img-crop");
 const imgCropCanvas = document.getElementById("img-crop-canvas");
 const imgCropBox = document.getElementById("img-crop-box");
 const imgPreviewInfo = document.getElementById("img-preview-info");
+const imgPreviewCaption = document.getElementById("img-preview-caption");
 const imgCropPresets = document.getElementById("img-crop-presets");
 const imgPreviewError = document.getElementById("img-preview-error");
 const imgPreviewActions = document.getElementById("img-preview-actions");
@@ -1380,12 +1388,29 @@ function previewImageUrl(url) {
   return null;
 }
 
-/** Cover art and avatars go small beside the text, like the integration cards. */
+/** Cover art and avatars go beside the text, like the integration cards. */
 function previewImageIsSquare(p) {
   return p.provider === "spotify" || p.provider === "lastfm" || p.provider === "telegram"
     || (p.provider === "x" && /\/profile_images\//.test(p.image || ""));
 }
 
+// The card's left edge: the page's theme-color, else the platform's own color.
+const LINK_PREVIEW_COLORS = {
+  youtube: "#ff0033", spotify: "#1ed760", x: "#e7e9ea", lastfm: "#d51007", instagram: "#e1306c", telegram: "#2aabee",
+};
+
+function previewDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/**
+ * Head (icon, site, date), title, author (artist, channel, byline),
+ * description, then the image: beside the text for covers and avatars, full
+ * width otherwise, with a play mark for videos. Every text by textContent;
+ * the color only after normalizeHexColor.
+ */
 function linkPreviewCard(p) {
   const card = el("a", `integration-card link-preview link-preview-${p.provider}`);
   card.href = p.url;
@@ -1393,27 +1418,48 @@ function linkPreviewCard(p) {
   card.rel = "noopener noreferrer";
   card.addEventListener("click", (e) => e.stopPropagation());
 
+  const brand = LINK_PREVIEW_COLORS[p.provider] || null;
+  const accent = normalizeHexColor(p.color) || brand;
+  if (accent) {
+    card.classList.add("has-accent");
+    card.style.borderLeftColor = accent;
+  }
+
   const head = el("div", "integration-head");
   const icon = el("i", `bi ${LINK_PREVIEW_ICONS[p.provider] || LINK_PREVIEW_ICONS.generic}`);
   icon.setAttribute("aria-hidden", "true");
+  if (brand) icon.style.color = brand;
   head.append(icon, el("span", "integration-label", p.siteName || hostOf(p.url)));
+  const date = previewDate(p.publishedAt);
+  if (date) head.appendChild(el("span", "integration-meta", date));
   card.appendChild(head);
 
   const text = el("div", "integration-text");
   if (p.title) text.appendChild(el("div", "integration-title link-preview-title", p.title));
-  if (p.description) text.appendChild(el("div", "integration-sub link-preview-desc", p.description));
+  if (p.author) text.appendChild(el("div", "integration-sub link-preview-author", p.author));
+  if (p.description) text.appendChild(el("div", "integration-sub dim link-preview-desc", p.description));
 
   const imageUrl = previewImageUrl(p.image);
   if (imageUrl && previewImageIsSquare(p)) {
     const body = el("div", "integration-body");
-    const art = externalImage(imageUrl, "integration-art");
+    const art = externalImage(imageUrl, "integration-art link-preview-art");
     if (art) body.appendChild(art);
     body.appendChild(text);
     card.appendChild(body);
   } else {
     if (text.childElementCount) card.appendChild(text);
     const wide = imageUrl ? externalImage(imageUrl, "link-preview-image") : null;
-    if (wide) card.appendChild(wide);
+    if (wide) {
+      const media = el("div", "link-preview-media");
+      media.appendChild(wide);
+      if (p.video) {
+        const play = el("span", "link-preview-play");
+        play.innerHTML = '<i class="bi bi-play-fill" aria-hidden="true"></i>';
+        media.appendChild(play);
+      }
+      wide.addEventListener("error", () => media.remove());
+      card.appendChild(media);
+    }
   }
   return card;
 }
@@ -1560,6 +1606,7 @@ async function fetchSocial() {
     renderProfileBadge();
     renderIncomingRequests();
     if (bubbleUser) renderBubble();
+    if (selectedUser) applyNameColor(dmUsername, nameColorOf(selectedUser.userId, selectedUser.nameColor));
   } catch (e) {
     console.warn("[app] fetchSocial:", e);
   }
@@ -1814,6 +1861,7 @@ async function selectUser(user) {
   dmPlaceholder.hidden = true;
   dmPanel.hidden = false;
   dmUsername.textContent = displayName(user);
+  applyNameColor(dmUsername, nameColorOf(user.userId, user.nameColor));
   dmUsername.dataset.userid = user.userId;
   setAvatarOrFallback(dmHeaderAvatar, user.userId, user.hasAvatar, "avatar-img");
   dmStatus.className = `status-dot ${userStatus(user)}`;
@@ -1888,9 +1936,9 @@ async function markRead(userId) {
 function snippet(replyTo) {
   if (replyTo.deleted) return STRINGS.roomDeleted;
   if (replyTo.content) {
-    return replyTo.content.length > 80
-      ? replyTo.content.slice(0, 80) + "…"
-      : replyTo.content;
+    // An image with a caption: "(imagem) caption".
+    const text = replyTo.mediaType?.startsWith("image/") ? `${STRINGS.snippetImage} ${replyTo.content}` : replyTo.content;
+    return text.length > 80 ? text.slice(0, 80) + "…" : text;
   }
   if (replyTo.mediaType?.startsWith("image/")) return "(imagem)";
   if (replyTo.mediaType?.startsWith("audio/")) return "(áudio)";
@@ -1929,6 +1977,7 @@ function renderReplyBar() {
     return;
   }
   replyName.textContent = replyingTo.senderUsername;
+  applyNameColor(replyName, replyingTo.senderId ? nameColorOf(replyingTo.senderId, null) : null);
   replySnippet.textContent = snippet(replyingTo);
   replyBar.hidden = false;
 }
@@ -1941,9 +1990,27 @@ function jumpToMessage(id) {
   setTimeout(() => target.classList.remove("dm-bubble-highlight"), 1500);
 }
 
-function createImageBubble(url) {
+// Image thumbnails keep the image's own shape (clamped between 1:2 and 2:1, so
+// a panorama or a long screenshot is cropped only past that), are never taller
+// than IMAGE_THUMB_MAX_HEIGHT and sit centered in the bubble.
+const IMAGE_THUMB_MAX_HEIGHT = 360;
+const IMAGE_THUMB_MIN_RATIO = 0.5;
+const IMAGE_THUMB_MAX_RATIO = 2;
+
+function applyImageShape(wrap, width, height) {
+  if (!(width > 0 && height > 0)) return false;
+  const ratio = Math.min(IMAGE_THUMB_MAX_RATIO, Math.max(IMAGE_THUMB_MIN_RATIO, width / height));
+  wrap.style.aspectRatio = String(ratio);
+  wrap.style.maxWidth = `${Math.round(IMAGE_THUMB_MAX_HEIGHT * ratio)}px`;
+  wrap.dataset.shaped = "1";
+  return true;
+}
+
+/** `message` (optional) gives the stored size, so the box has its shape before the image loads. */
+function createImageBubble(url, message = null) {
   const wrap = document.createElement("div");
-  wrap.className = "dm-media-wrap";
+  wrap.className = "dm-media-wrap dm-image-wrap";
+  applyImageShape(wrap, message?.mediaWidth, message?.mediaHeight);
 
   const img = document.createElement("img");
   img.alt = "Imagem";
@@ -1957,6 +2024,8 @@ function createImageBubble(url) {
   error.textContent = "Falha ao carregar imagem";
 
   function reveal() {
+    // No stored size (older rows): take the shape from the image itself.
+    if (!wrap.dataset.shaped) applyImageShape(wrap, img.naturalWidth, img.naturalHeight);
     wrap.classList.add("loaded");
   }
 
@@ -2705,6 +2774,7 @@ function renderMessages(options = {}) {
       const quoteName = document.createElement("div");
       quoteName.className = "dm-quote-name";
       quoteName.textContent = m.replyTo.senderUsername;
+      applyNameColor(quoteName, m.replyTo.senderId ? nameColorOf(m.replyTo.senderId, null) : null);
 
       const quoteText = document.createElement("div");
       quoteText.className = "dm-quote-text";
@@ -2725,7 +2795,7 @@ function renderMessages(options = {}) {
       } else if (m.mediaType.startsWith("video/")) {
         bubble.appendChild(createVideoBubble(m));
       } else {
-        bubble.appendChild(createImageBubble(fileUrl(m.id)));
+        bubble.appendChild(createImageBubble(fileUrl(m.id), m));
       }
     }
 
@@ -2947,16 +3017,16 @@ async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
   await pollConversation();
 }
 
-/** Lightbox items { id, url } of the open conversation (DM or room). */
+/** Lightbox items { id, url, caption } of the open conversation (DM or room). */
 function imageMessages() {
   if (currentRoom) {
     return roomMessages
       .filter(m => !m.deleted && m.mediaType?.startsWith("image/"))
-      .map(m => ({ id: m.id, url: roomImageUrl(m.id) }));
+      .map(m => ({ id: m.id, url: roomImageUrl(m.id), caption: m.content || "" }));
   }
   return messageList
     .filter(m => m.mediaType?.startsWith("image/"))
-    .map(m => ({ id: m.id, url: fileUrl(m.id) }));
+    .map(m => ({ id: m.id, url: fileUrl(m.id), caption: m.content || "" }));
 }
 
 function currentLightboxImages() {
@@ -2978,6 +3048,9 @@ function openLightbox(messageId, sourceList = null) {
 
 function closeLightbox() {
   dmLightbox.hidden = true;
+  dmLightbox.classList.remove("has-caption");
+  dmLightboxCaption.hidden = true;
+  dmLightboxCaption.textContent = "";
   delete dmLightboxImg.dataset.mediaUrl;
   dmLightboxImg.removeAttribute("src");
   dmLightboxThumbs.innerHTML = "";
@@ -2999,6 +3072,15 @@ function renderLightboxNav() {
   const images = currentLightboxImages();
   dmLightboxPrev.hidden = lightboxImageIndex <= 0;
   dmLightboxNext.hidden = lightboxImageIndex >= images.length - 1;
+  renderLightboxCaption(images[lightboxImageIndex]);
+}
+
+function renderLightboxCaption(item) {
+  const text = item?.caption || "";
+  dmLightboxCaption.textContent = "";
+  if (text) appendLinkifiedText(text, dmLightboxCaption);
+  dmLightboxCaption.hidden = !text;
+  dmLightbox.classList.toggle("has-caption", !!text);
 }
 
 function renderLightboxThumbs() {
@@ -3075,6 +3157,7 @@ let imgItem = null;     // { file, decoded, crop, result, gif, url }
 let imgBusy = false;    // a send is in flight
 let imgSeq = 0;         // bumped whenever the popup closes; stale async work checks it
 let imgCrop = null;     // crop mode: { rect, aspect, scale, drag }
+let imgBatchCaption = ""; // composer text moved into the first image's caption
 
 function imageInputMessage(problem) {
   return problem === "size" ? STRINGS.imgTooBig : STRINGS.imgNotImage;
@@ -3112,6 +3195,12 @@ function queueImages(files, target) {
     imgTarget = target;
     imgTotal = 0;
     imgDone = 0;
+    // Text already typed becomes the first image's caption (given back on cancel).
+    if (target.kind !== "avatar" && dmInput.value.trim()) {
+      imgBatchCaption = dmInput.value.trim();
+      dmInput.value = "";
+      autoResizeInput();
+    }
   }
   imgQueue.push(...accepted);
   imgTotal += accepted.length;
@@ -3153,6 +3242,8 @@ async function showNextImage() {
     releaseImageItem(item);
     return;
   }
+  item.caption = imgBatchCaption;
+  imgBatchCaption = "";
   imgItem = item;
   openImagePreview();
 }
@@ -3189,12 +3280,25 @@ function openImagePreview() {
   imgPreview.classList.toggle("global", avatar);
   imgPreviewOverlay.classList.toggle("global", avatar);
   imgPreviewError.textContent = "";
+  imgPreviewCaption.value = avatar ? "" : (imgItem.caption || "");
   exitCropMode();
   renderImagePreview();
   imgPreviewOverlay.hidden = false;
   imgPreview.hidden = false;
-  imgPreviewSend.focus();
+  // With a mouse the caption takes the focus (Enter still sends); on touch the
+  // keyboard would cover the preview, so the send button does.
+  if (!avatar && window.matchMedia?.("(pointer: fine)").matches) imgPreviewCaption.focus();
+  else imgPreviewSend.focus();
 }
+
+/** The caption field: images for a DM or a room only, hidden in crop mode. */
+function syncImageCaption() {
+  imgPreviewCaption.hidden = !imgItem || imgTarget?.kind === "avatar" || !!imgCrop;
+}
+
+imgPreviewCaption.addEventListener("input", () => {
+  if (imgItem) imgItem.caption = imgPreviewCaption.value;
+});
 
 function renderImagePreview() {
   if (!imgItem) return;
@@ -3221,6 +3325,7 @@ function renderImageSendButton(progress = null) {
   imgPreviewSend.disabled = imgBusy;
   imgPreviewCancel.disabled = imgBusy;
   imgPreviewCrop.disabled = imgBusy;
+  imgPreviewCaption.disabled = imgBusy;
   imgPreviewSend.textContent = imgBusy
     ? fillString(STRINGS.imgSending, { p: Math.round((progress || 0) * 100) })
     : (avatar ? STRINGS.imgSave : STRINGS.imgSend);
@@ -3236,7 +3341,9 @@ function closeImagePreview({ all = false } = {}) {
   imgPreview.hidden = true;
   imgPreviewOverlay.hidden = true;
   imgPreviewImg.removeAttribute("src");
+  imgPreviewCaption.value = "";
   if (all) {
+    imgBatchCaption = "";
     imgQueue = [];
     imgTarget = null;
     imgTotal = 0;
@@ -3258,7 +3365,13 @@ function finishCurrentImage() {
 
 function cancelImage() {
   if (imgBusy || !imgItem) return;
+  const caption = imgTarget?.kind !== "avatar" ? (imgItem.caption || "").trim() : "";
   finishCurrentImage();
+  // A cancelled image gives its caption back to the composer: nothing typed is lost.
+  if (caption && !dmInput.value.trim() && (currentRoom || selectedUser)) {
+    dmInput.value = caption;
+    autoResizeInput();
+  }
 }
 
 /** POST with upload progress (fetch has none). Same token / 401 handling as authFetch. */
@@ -3294,6 +3407,7 @@ async function authUpload(url, payload, onProgress) {
 function imageSendErrorText(res) {
   if (res.status === 429 && res.data?.error) return res.data.error;
   if (res.status === 400 && res.data?.error === "Image file is too large") return STRINGS.imgServerTooBig;
+  if (res.status === 400 && /^Caption/.test(res.data?.error || "")) return STRINGS.imgCaptionTooLong;
   if (res.status === 400 && /image/i.test(res.data?.error || "")) return STRINGS.imgUnsupported;
   return STRINGS.imgSendFailed;
 }
@@ -3307,6 +3421,7 @@ async function sendCurrentImage() {
   renderImageSendButton(0);
   const onProgress = (p) => { if (seq === imgSeq) renderImageSendButton(p); };
 
+  const caption = target.kind === "avatar" ? "" : (imgItem.caption || "").trim();
   let res;
   try {
     const imageBase64 = await fileToBase64(imgItem.result.blob);
@@ -3316,6 +3431,7 @@ async function sendCurrentImage() {
       res = await authUpload("/api/file", {
         recipientUserId: target.recipient.userId,
         imageBase64,
+        content: caption,
         replyToId: replyingTo?.id,
       }, onProgress);
     } else {
@@ -3323,6 +3439,7 @@ async function sendCurrentImage() {
         action: "image",
         room: target.room,
         imageBase64,
+        content: caption,
         replyToId: replyingTo?.id,
       }, onProgress);
     }
@@ -3413,6 +3530,7 @@ function enterCropMode() {
   imgCropActions.hidden = false;
   imgCropPresets.hidden = avatar; // avatars are locked to 1:1
   imgPreviewError.textContent = "";
+  syncImageCaption();
   renderCropPresets();
   drawCropCanvas();
   imgCropApply.focus();
@@ -3425,6 +3543,7 @@ function exitCropMode() {
   imgCropActions.hidden = true;
   imgPreviewActions.hidden = false;
   imgPreviewImg.hidden = false;
+  syncImageCaption();
 }
 
 /** The original (uncompressed) image, scaled to fit the stage. */
@@ -4012,6 +4131,7 @@ function renderProfileSummary() {
 
   profilePfpBtn.textContent = me.hasAvatar ? "Editar PFP" : "Adicionar PFP";
 
+  applyNameColor(shownameValue, me.showname ? me.nameColor : null);
   if (me.showname) {
     shownameValue.textContent = me.showname;
     shownameValue.classList.remove("empty");
@@ -4060,6 +4180,7 @@ function renderIncomingRequests() {
       showname: req.senderShowname,
       username: req.senderUsername,
     });
+    applyNameColor(name, nameColorOf(req.senderId, null));
 
     const actions = document.createElement("div");
     actions.className = "profile-request-actions";
@@ -4504,6 +4625,7 @@ function closeContactPanel() {
 function populateContactPanel() {
   if (!selectedUser) return;
   contactName.textContent = displayName(selectedUser);
+  applyNameColor(contactName, nameColorOf(selectedUser.userId, selectedUser.nameColor));
   contactHandle.textContent = `@${selectedUser.username}`;
   contactStatus.textContent = STATUS_LABELS[userStatus(selectedUser)];
   contactStatus.className = `contact-panel-status ${userStatus(selectedUser)}`;
@@ -4519,6 +4641,7 @@ function populateContactPanel() {
       const data = await r.json();
       if (!currentContact || currentContact.userId !== targetId) return;
       contactName.textContent = data.showname || data.username || displayName(selectedUser);
+      applyNameColor(contactName, data.nameColor || null);
       contactHandle.textContent = data.username ? `@${data.username}` : `@${selectedUser.username}`;
       if (data.online != null) {
         contactStatus.textContent = STATUS_LABELS[userStatus(data)];
@@ -4777,6 +4900,7 @@ async function openRoom(name) {
   dmPanel.hidden = false;
   dmPanel.classList.add("room-mode");
   dmUsername.textContent = name;
+  applyNameColor(dmUsername, null); // a room name is never a user's color
   delete dmUsername.dataset.userid;
   dmRoomBoard.textContent = ROOM_BOARDS[name] || "";
   dmRoomBoard.hidden = !ROOM_BOARDS[name];
@@ -5169,6 +5293,7 @@ function renderRoomMessages(options = {}) {
       const quoteName = document.createElement("div");
       quoteName.className = "dm-quote-name";
       quoteName.textContent = m.replyTo.senderUsername || "";
+      applyNameColor(quoteName, m.replyTo.senderId ? nameColorOf(m.replyTo.senderId, null) : null);
 
       const quoteText = document.createElement("div");
       quoteText.className = "dm-quote-text";
@@ -5184,7 +5309,7 @@ function renderRoomMessages(options = {}) {
     }
 
     if (m.mediaType?.startsWith("image/")) {
-      bubble.appendChild(createImageBubble(roomImageUrl(m.id)));
+      bubble.appendChild(createImageBubble(roomImageUrl(m.id), m));
     }
 
     if (m.content) {
@@ -5467,6 +5592,7 @@ function renderAccountProfile() {
   accountAvatarBtn.textContent = me.hasAvatar ? STRINGS.accountAvatarEdit : STRINGS.accountAvatarAdd;
   accountShownameValue.textContent = me.showname || STRINGS.accountUnknown;
   accountShownameValue.classList.toggle("empty", !me.showname);
+  applyNameColor(accountShownameValue, me.showname ? me.nameColor : null);
   accountShownameEdit.textContent = me.showname ? STRINGS.accountEdit : STRINGS.accountAdd;
   renderAccountNameColor();
 }
@@ -5517,6 +5643,14 @@ function nameColorOf(userId, fallback) {
   return cached ? cached.nameColor || null : fallback || null;
 }
 
+/** The same, for lists that only carry a username (owner DASHBOARD). */
+function nameColorOfUsername(username) {
+  const key = String(username || "").toLowerCase();
+  if (!key) return null;
+  if (me && me.username.toLowerCase() === key) return me.nameColor || null;
+  return usersCache.find(u => String(u.username).toLowerCase() === key)?.nameColor || null;
+}
+
 function renderAccountNameColor() {
   if (!me) return;
   const allowed = !!me.nameColorAllowed;
@@ -5555,8 +5689,12 @@ function setAccountColorDraft(value) {
 function refreshNameColors() {
   applyNameColor(profileName, me.nameColor);
   applyNameColor(accountName, me.nameColor);
+  applyNameColor(shownameValue, me.showname ? me.nameColor : null);
+  applyNameColor(accountShownameValue, me.showname ? me.nameColor : null);
+  if (replyingTo) renderReplyBar();
   if (currentRoom && roomMessages.length) renderRoomMessages({ scroll: "auto" });
-  if (bubbleUser) renderBubble();
+  if (selectedUser && messageList.length) renderMessages({ scroll: "auto" }); // own name in reply quotes
+  if (bubbleUser || roomProfileView.user) renderBubble();
 }
 
 async function saveNameColor(color) {
@@ -6851,8 +6989,15 @@ function renderOwnerBans() {
   for (const a of list) {
     const row = el("div", "owner-row");
     const who = el("div", "owner-row-who");
-    who.appendChild(el("span", "owner-row-handle", `@${a.username}`));
-    if (a.showname) who.appendChild(el("span", "owner-row-name", a.showname));
+    const color = nameColorOfUsername(a.username);
+    const handle = el("span", "owner-row-handle", `@${a.username}`);
+    applyNameColor(handle, color);
+    who.appendChild(handle);
+    if (a.showname) {
+      const shown = el("span", "owner-row-name", a.showname);
+      applyNameColor(shown, color);
+      who.appendChild(shown);
+    }
     row.appendChild(who);
     row.appendChild(el("div", "owner-row-rooms", banRoomsText(a.bans)));
     const actions = el("div", "account-actions");
@@ -7159,7 +7304,9 @@ function renderOwnerNicks() {
   for (const n of ownerNicks) {
     const row = el("div", "owner-row");
     const who = el("div", "owner-row-who");
-    who.appendChild(el("span", "owner-row-handle", `@${n.username}`));
+    const handle = el("span", "owner-row-handle", `@${n.username}`);
+    applyNameColor(handle, nameColorOfUsername(n.username));
+    who.appendChild(handle);
     who.appendChild(el("span", "owner-row-name", `${n.room} ${ROOM_BOARDS[n.room] || ""}`.trim()));
     row.appendChild(who);
     row.appendChild(el("div", "owner-row-nick", n.nickname));
@@ -7320,6 +7467,7 @@ document.addEventListener("keydown", (e) => {
       return;
     }
     if (e.key === "Enter" && !e.isComposing && !e.target.closest?.("button")) {
+      if (e.shiftKey && e.target === imgPreviewCaption) return; // a new line in the caption
       e.preventDefault();
       if (imgCrop) applyCrop();
       else sendCurrentImage();
