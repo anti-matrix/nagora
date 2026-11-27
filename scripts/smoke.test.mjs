@@ -1100,18 +1100,20 @@ await ok("previewCacheId: versioned, so entries in the old shape are not served"
 
 console.log("captions:");
 const msgs = await import("../lib/messages.js");
-await ok("parseCaption: trimmed text, empty for none, refused over 2000 characters", () => {
+await ok("parseCaption: trimmed text, empty for none, same limit as a text message", () => {
   assert.deepEqual(msgs.parseCaption("  olha isso \n "), { valid: true, text: "olha isso" });
   for (const none of [undefined, null, "", "   ", 42, {}, ["x"]]) {
     assert.deepEqual(msgs.parseCaption(none), { valid: true, text: "" }, String(none));
   }
-  assert.equal(msgs.CAPTION_MAX_LENGTH, 2000);
-  assert.deepEqual(msgs.parseCaption("a".repeat(2000)), { valid: true, text: "a".repeat(2000) });
-  assert.deepEqual(msgs.parseCaption("a".repeat(2001)), { valid: false, text: "" });
-  assert.deepEqual(msgs.parseCaption(`  ${"a".repeat(2000)}  `).valid, true, "counted after trimming");
-  // The client field allows the same length.
+  // Rooms pass their text limit (2000); DMs pass none, like DM text.
+  assert.deepEqual(msgs.parseCaption("a".repeat(2000), 2000), { valid: true, text: "a".repeat(2000) });
+  assert.deepEqual(msgs.parseCaption("a".repeat(2001), 2000), { valid: false, text: "" });
+  assert.equal(msgs.parseCaption(`  ${"a".repeat(2000)}  `, 2000).valid, true, "counted after trimming");
+  assert.deepEqual(msgs.parseCaption("a".repeat(50000)), { valid: true, text: "a".repeat(50000) });
+  // The client field: no fixed maxlength in the markup; rooms set ROOM_MAX_LENGTH, DMs none.
   const src = readFileSync(new URL("../js/UGqaIF1Z55PgcI4.js", import.meta.url), "utf8");
-  assert.match(src, /id="img-preview-caption"[^>]*maxlength="2000"/);
+  assert.doesNotMatch(src, /id="img-preview-caption"[^>]*maxlength/);
+  assert.match(src, /imgPreviewCaption.maxLength = ROOM_MAX_LENGTH/);
 });
 
 console.log(`\nAll ${passed} tests passed.`);

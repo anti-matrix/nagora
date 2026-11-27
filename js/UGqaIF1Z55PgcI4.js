@@ -119,7 +119,7 @@
                     </div>
                 </div>
                 <p id="img-preview-info"></p>
-                <textarea class="img-preview-caption" id="img-preview-caption" rows="2" maxlength="2000" data-str-placeholder="imgCaptionPlaceholder" data-str-label="imgCaptionLabel" hidden></textarea>
+                <textarea class="img-preview-caption" id="img-preview-caption" rows="2" data-str-placeholder="imgCaptionPlaceholder" data-str-label="imgCaptionLabel" hidden></textarea>
                 <div class="img-crop-presets" id="img-crop-presets" role="group" data-str-label="imgCropRatio" hidden></div>
                 <p class="img-preview-error" id="img-preview-error" role="alert"></p>
                 <div class="logout-confirm-actions" id="img-preview-actions">
@@ -3294,6 +3294,9 @@ function openImagePreview() {
 /** The caption field: images for a DM or a room only, hidden in crop mode. */
 function syncImageCaption() {
   imgPreviewCaption.hidden = !imgItem || imgTarget?.kind === "avatar" || !!imgCrop;
+  // Same limit as a text message there: rooms 2000, DMs none.
+  if (imgTarget?.kind === "room") imgPreviewCaption.maxLength = ROOM_MAX_LENGTH;
+  else imgPreviewCaption.removeAttribute("maxlength");
 }
 
 imgPreviewCaption.addEventListener("input", () => {
