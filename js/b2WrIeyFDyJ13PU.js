@@ -1,19 +1,13 @@
-// NAGORA image pipeline: decode, scale, crop and compress an image in the
-// browser before it is shown in the preview popup and sent. Shared by DM
-// images, room images and avatars.
-//
-// Loaded as a classic <script> before the app bundle; it only defines
-// globalThis.NagoraImage. No import/export, so scripts/smoke.test.mjs can
-// import this same file in Node and test the pure functions.
+// Classic script (no import/export) so scripts/smoke.test.mjs can load it in Node.
 (function (root) {
   "use strict";
 
-  const MAX_INPUT_BYTES = 15 * 1024 * 1024; // larger files are refused before decoding
-  const MAX_OUTPUT_BYTES = 1024 * 1024;     // same as the server cap (lib/images.js MAX_IMAGE_BYTES)
+  const MAX_INPUT_BYTES = 15 * 1024 * 1024;
+  const MAX_OUTPUT_BYTES = 1024 * 1024; // = lib/images.js MAX_IMAGE_BYTES
   const MAX_SIDE = 1600;
-  const AVATAR_SIDE = 512;                  // the server makes the final 128 x 128
-  const QUALITY_STEPS = [0.82, 0.72, 0.6];  // tried in order until the result fits MAX_OUTPUT_BYTES
-  const MIN_CROP = 32;                      // smallest crop side, in image pixels
+  const AVATAR_SIDE = 512; // the server makes the final 128 x 128
+  const QUALITY_STEPS = [0.82, 0.72, 0.6];
+  const MIN_CROP = 32;
 
   const CROP_PRESETS = [
     { id: "free", aspect: null },
@@ -22,9 +16,6 @@
     { id: "16:9", aspect: 16 / 9 },
   ];
 
-  // ── Pure functions (unit-tested) ─────────────────────────────────────────
-
-  /** Size that fits inside max x max, keeping the ratio; never enlarges. */
   function fitWithin(width, height, max) {
     const scale = Math.min(1, max / Math.max(width, height));
     return {
@@ -33,14 +24,12 @@
     };
   }
 
-  /** null when the picked/pasted/dropped file may go through, else "type" or "size". */
   function inputProblem(file) {
     if (!file || typeof file.type !== "string" || !file.type.startsWith("image/")) return "type";
     if (!(file.size > 0) || file.size > MAX_INPUT_BYTES) return "size";
     return null;
   }
 
-  /** null when the bytes to send fit the server cap, else "size". */
   function outputProblem(byteLength) {
     return byteLength > 0 && byteLength <= MAX_OUTPUT_BYTES ? null : "size";
   }
@@ -54,7 +43,6 @@
     return p;
   }
 
-  /** Number of frames in GIF bytes (stops counting at `stopAt`). 0 when not a GIF. */
   function gifFrameCount(b, stopAt = 2) {
     if (!b || b.length < 13 || b[0] !== 0x47 || b[1] !== 0x49 || b[2] !== 0x46) return 0;
     let p = 13;
@@ -63,7 +51,7 @@
     while (p < b.length) {
       const type = b[p++];
       if (type === 0x3b) break;                      // trailer
-      if (type === 0x21) {                           // extension: label + sub-blocks
+      if (type === 0x21) {                           // extension
         p = skipSubBlocks(b, p + 1);
       } else if (type === 0x2c) {                    // image descriptor
         frames++;
@@ -72,7 +60,7 @@
         const flags = b[p + 8];
         p += 9;
         if (flags & 0x80) p += 3 * (1 << ((flags & 7) + 1)); // local color table
-        p = skipSubBlocks(b, p + 1);                 // LZW minimum code size + data
+        p = skipSubBlocks(b, p + 1);
       } else {
         break;
       }
@@ -80,12 +68,10 @@
     return frames;
   }
 
-  /** Animated GIFs skip scaling and cropping and are sent as they are (still under the size cap). */
   function bypassesProcessing(type, frameCount) {
     return type === "image/gif" && frameCount > 1;
   }
 
-  /** Largest centered crop with `aspect` (width / height); the whole image when aspect is null. */
   function initialCrop(aspect, W, H) {
     if (!aspect) return { x: 0, y: 0, w: W, h: H };
     let w = W;
@@ -101,7 +87,6 @@
     return Math.min(hi, Math.max(lo, v));
   }
 
-  /** The crop moved by (dx, dy), kept inside the W x H image. */
   function moveCrop(rect, dx, dy, W, H) {
     return {
       x: clamp(rect.x + dx, 0, W - rect.w),
@@ -111,15 +96,11 @@
     };
   }
 
-  /**
-   * The crop after dragging `corner` ("nw" | "ne" | "sw" | "se") by (dx, dy).
-   * The opposite corner stays put; the result keeps `aspect` when given, stays
-   * inside W x H and is at least `min` per side (or as large as fits).
-   */
+  /** Dragging `corner` ("nw" | "ne" | "sw" | "se"): the opposite corner stays put. */
   function resizeCrop(rect, corner, dx, dy, aspect, W, H, min = MIN_CROP) {
     const west = corner.includes("w");
     const north = corner.includes("n");
-    const ax = west ? rect.x + rect.w : rect.x; // anchor (opposite corner)
+    const ax = west ? rect.x + rect.w : rect.x;
     const ay = north ? rect.y + rect.h : rect.y;
     const maxW = west ? ax : W - ax;
     const maxH = north ? ay : H - ay;
@@ -137,7 +118,6 @@
     return { x: west ? ax - w : ax, y: north ? ay - h : ay, w, h };
   }
 
-  /** Whole-pixel crop inside the image (what is actually drawn). */
   function roundCrop(rect, W, H) {
     const x = clamp(Math.round(rect.x), 0, W - 1);
     const y = clamp(Math.round(rect.y), 0, H - 1);
@@ -149,25 +129,17 @@
     };
   }
 
-  /** "245 KB" style size (at least 1). */
   function kilobytes(byteLength) {
     return Math.max(1, Math.round(byteLength / 1024));
   }
 
-  // ── Browser side ─────────────────────────────────────────────────────────
-
-  /**
-   * Decodes a File honoring EXIF orientation. Returns { source, width, height, close }
-   * where `source` can be drawn on a canvas.
-   */
   async function decodeImage(file) {
     if (typeof createImageBitmap === "function") {
       try {
         const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
         return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
       } catch {
-        // Option or format not supported here: fall back to <img>, which
-        // applies EXIF orientation by default.
+        // Fall back to <img>, which also applies EXIF orientation.
       }
     }
     const url = URL.createObjectURL(file);
@@ -178,23 +150,17 @@
       if (!img.naturalWidth || !img.naturalHeight) throw new Error("empty image");
       return { source: img, width: img.naturalWidth, height: img.naturalHeight, close: () => {} };
     } finally {
-      // The decoded <img> keeps its pixels after the URL is revoked.
       URL.revokeObjectURL(url);
     }
   }
 
-  let webpEncodeSupported = null; // learned from the first encode
+  let webpEncodeSupported = null;
 
   function canvasToBlob(canvas, type, quality) {
     return new Promise(resolve => canvas.toBlob(resolve, type, quality));
   }
 
-  /**
-   * Draws `crop` of the decoded image scaled to fit `maxSide`, then encodes it:
-   * WebP when the browser can (checked on the returned blob type), else JPEG,
-   * stepping the quality down until the result fits MAX_OUTPUT_BYTES.
-   * Returns { blob, width, height } or throws Error("too-large").
-   */
+  /** WebP when the browser can encode it, else JPEG. Throws Error("too-large"). */
   async function encodeImage(decoded, crop, maxSide) {
     const area = roundCrop(crop || { x: 0, y: 0, w: decoded.width, h: decoded.height }, decoded.width, decoded.height);
     const { width, height } = fitWithin(area.w, area.h, maxSide);
@@ -207,7 +173,6 @@
       const type = webpEncodeSupported === false ? "image/jpeg" : "image/webp";
       ctx.clearRect(0, 0, width, height);
       if (type === "image/jpeg") {
-        // JPEG has no transparency; white reads better than black behind it.
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, width, height);
       }
@@ -228,7 +193,6 @@
     throw new Error("too-large");
   }
 
-  /** Reads the first bytes of a GIF and says whether it has more than one frame. */
   async function isAnimatedGif(file) {
     if (file.type !== "image/gif") return false;
     const bytes = new Uint8Array(await file.arrayBuffer());
