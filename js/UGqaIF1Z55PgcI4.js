@@ -651,7 +651,7 @@ const STRINGS = {
   nameColorPick: "Escolher cor",
   nameColorHexLabel: "Código da cor (hex)",
   nameColorReset: "Usar a cor padrão",
-  nameColorTooDark: "Cor escura demais: fica ilegível no fundo escuro. Escolha uma mais clara.",
+  nameColorTooDark: "Cor escura demais: ficaria praticamente invisível no fundo. Escolha uma mais clara.",
   nameColorInvalid: "Use o formato #RRGGBB.",
   nameColorSaved: "Cor salva.",
   nameColorFailed: "Não foi possível salvar a cor.",
@@ -5474,7 +5474,7 @@ function renderAccountProfile() {
 // ── Name color (cosmetic) ───────────────────────────────────────────────
 // Same rules as lib/cosmetics.js; the server checks again on save.
 const NAME_COLOR_BACKGROUND = "#2a2a2a"; // lightest row/bubble background a name sits on
-const NAME_COLOR_MIN_CONTRAST = 3;
+const NAME_COLOR_MIN_CONTRAST = 1.5; // same as lib/cosmetics.js: only practically invisible colors
 const NAME_COLOR_DEFAULT = "#ffffff";    // what the picker shows when no color is set
 
 let accountColorDraft;      // undefined = no edit in progress; null = default; "#rrggbb"

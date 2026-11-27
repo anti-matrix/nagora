@@ -389,13 +389,17 @@ await ok("name color: normalized to lowercase #rrggbb", () => {
     assert.equal(cosmetics.normalizeNameColor(bad), null, String(bad));
   }
 });
-await ok("name color: too dark for the background is refused", () => {
-  assert.equal(cosmetics.nameColorProblem("#ffffff"), null);
-  assert.equal(cosmetics.nameColorProblem("#ff4444"), null);
-  assert.equal(cosmetics.nameColorProblem("#4fc3f7"), null);
-  assert.equal(cosmetics.nameColorProblem("#000000"), "contrast");
-  assert.equal(cosmetics.nameColorProblem("#0000ff"), "contrast");
-  assert.equal(cosmetics.nameColorProblem("#2a2a2a"), "contrast");
+await ok("name color: only practically invisible colors are refused (1.5:1, server and client agree)", async () => {
+  assert.equal(cosmetics.NAME_COLOR_MIN_CONTRAST, 1.5);
+  const fs = await import("node:fs");
+  const bundle = fs.readFileSync(new URL("../js/UGqaIF1Z55PgcI4.js", import.meta.url), "utf8");
+  assert.equal(Number(bundle.match(/const NAME_COLOR_MIN_CONTRAST = ([\d.]+);/)[1]), cosmetics.NAME_COLOR_MIN_CONTRAST);
+  for (const ok of ["#ffffff", "#ff4444", "#4fc3f7", "#c11c84", "#C11C84", "#0000ff", "#800080", "#006400", "#555555"]) {
+    assert.equal(cosmetics.nameColorProblem(ok), null, ok);
+  }
+  for (const dark of ["#000000", "#2a2a2a", "#3a3a3a", "#444444", "#000080", "#4b0082", "#600000", "#8b0000"]) {
+    assert.equal(cosmetics.nameColorProblem(dark), "contrast", dark);
+  }
   assert.equal(cosmetics.nameColorProblem("blue"), "format");
   assert.ok(Math.abs(cosmetics.contrastRatio("#ffffff", "#000000") - 21) < 1e-9);
   assert.equal(cosmetics.contrastRatio("#123456", "#123456"), 1);
