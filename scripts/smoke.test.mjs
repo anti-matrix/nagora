@@ -371,11 +371,16 @@ await ok("email-changed notice: date and time in Brasília time, no link, no cod
 
 console.log("cosmetics:");
 const cosmetics = await import("../lib/cosmetics.js");
-await ok("name color: only account ids 1..10 may use it", () => {
-  for (const id of [1, 5, 10, "7"]) assert.equal(cosmetics.nameColorAllowed({ id }), true, String(id));
-  for (const id of [0, 11, 250, -1, 1.5, null, undefined, "x"]) assert.equal(cosmetics.nameColorAllowed({ id }), false, String(id));
+await ok("name color: the first 20 existing accounts by signup order (SQL decides, gaps in ids skipped)", () => {
+  assert.equal(cosmetics.NAME_COLOR_FREE_ACCOUNTS, 20);
+  assert.equal(cosmetics.nameColorAllowed({ name_color_allowed: true }), true);
+  for (const v of [false, null, undefined, "true", 1]) assert.equal(cosmetics.nameColorAllowed({ id: 1, name_color_allowed: v }), false, String(v));
+  assert.equal(cosmetics.nameColorAllowed({ id: 1 }), false, "the raw id alone never allows it");
   assert.equal(cosmetics.nameColorAllowed(null), false);
-  assert.equal(cosmetics.nameColorSql("a"), "CASE WHEN a.id <= 10 THEN a.name_color END");
+  const cutoff = "COALESCE((SELECT nc.id FROM accounts nc ORDER BY nc.id OFFSET 19 LIMIT 1), 2147483647)";
+  assert.equal(cosmetics.nameColorCutoffSql(), cutoff);
+  assert.equal(cosmetics.nameColorSql("a"), `CASE WHEN a.id <= ${cutoff} THEN a.name_color END`);
+  assert.equal(cosmetics.nameColorAllowedSql("accounts"), `(accounts.id <= ${cutoff}) AS name_color_allowed`);
 });
 await ok("name color: normalized to lowercase #rrggbb", () => {
   assert.equal(cosmetics.normalizeNameColor("#FF8800"), "#ff8800");
