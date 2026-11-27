@@ -3591,3 +3591,13 @@ body {
     text-decoration: underline;
   }
 }
+
+/* ── Signup: username note above the field (2026-11-26) ── */
+.username-note {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.username-note.hidden-field {
+    display: none;
+}

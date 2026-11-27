@@ -17,8 +17,9 @@
             <form id="auth-form" novalidate>
                 <div class="mb-3">
                     <label for="username" class="form-label">Usuário</label>
-                    <input type="text" class="form-control" id="username" autocomplete="username" required/>
-                    <div class="form-text">5 a 15 caracteres, sem espaços</div>
+                    <div class="form-text username-note signup-only hidden-field" id="username-note">Escolha com sabedoria, seu username é imutável e é a base da sua identificação na plataforma.</div>
+                    <input type="text" class="form-control" id="username" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="username-note" required/>
+                    <div class="form-text signup-only hidden-field">5 a 15 caracteres, só letras e números</div>
                 </div>
 
                 <div class="mb-3">
@@ -74,7 +75,8 @@
   if (!document.getElementById("auth-form")) throw new Error("buildAuth: layout injection failed");
 })();
 
-const USERNAME_RE = /^[^\s]{5,15}$/;
+// Signup rule, same as lib/validate.js. Login takes any name: older accounts may hold symbols.
+const USERNAME_RE = /^[A-Za-z0-9]{5,15}$/;
 const HAS_LETTER  = /[A-Za-z]/;
 const HAS_NUMBER  = /[0-9]/;
 
@@ -118,6 +120,7 @@ function setMode(next) {
   form.classList.remove("hidden-field");
   recoverForm.classList.add("hidden-field");
   forgotLink.classList.toggle("hidden-field", mode !== "login");
+  for (const n of form.querySelectorAll(".signup-only")) n.classList.toggle("hidden-field", mode !== "signup");
   if (mode === "login") {
     tabLogin.classList.add("active");
     tabSignup.classList.remove("active");
@@ -268,8 +271,11 @@ function validate() {
   const p = String(password.value);
   const c = String(confirmPassword.value);
 
-  if (!USERNAME_RE.test(u)) {
-    return "Usuário deve ter 5 a 15 caracteres (sem espaços).";
+  if (!u) {
+    return "Informe o usuário.";
+  }
+  if (mode === "signup" && !USERNAME_RE.test(u)) {
+    return "O usuário deve ter de 5 a 15 caracteres, só letras e números.";
   }
   if (p.length < 8) {
     return "A senha deve ter pelo menos 8 caracteres.";

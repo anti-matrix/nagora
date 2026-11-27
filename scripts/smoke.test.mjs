@@ -768,7 +768,17 @@ await ok("reserved usernames: lowercase, '@' dropped, signup rule", () => {
   assert.ok(validate.normalizeReservedUsername("abc").error, "too short");
   assert.ok(validate.normalizeReservedUsername("has space1").error, "whitespace");
   assert.ok(validate.normalizeReservedUsername("a".repeat(16)).error, "too long");
-  assert.equal(validate.usernameProblem("valid_name"), null);
+  assert.equal(validate.usernameProblem("ValidName1"), null);
+});
+await ok("signup username: 5-15 ASCII letters or digits only (server and auth page agree)", async () => {
+  const fs = await import("node:fs");
+  const page = fs.readFileSync(new URL("../js/DoviawP1ZfaCZBN.js", import.meta.url), "utf8");
+  const src = page.match(/const USERNAME_RE = (\/.+\/);/)[1];
+  assert.equal(src, String(validate.USERNAME_RE));
+  for (const good of ["lulu1", "Lulu2026", "abcde", "123456789012345"]) assert.equal(validate.usernameProblem(good), null, good);
+  for (const bad of ["lulu", "a".repeat(16), "lu*lu", "lu-lu", "lu_lu", "lu.lu", "@lulu1", "lulu 1", "lúlu1", "lulu１", "ｌｕｌｕ1", "lulu​1", "", null]) {
+    assert.ok(validate.usernameProblem(bad), String(bad));
+  }
 });
 await ok("room registry: every room has a one-line description", () => {
   const d = roomsLib.roomDescriptions();
