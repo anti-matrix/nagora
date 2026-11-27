@@ -119,7 +119,10 @@
                     </div>
                 </div>
                 <p id="img-preview-info"></p>
-                <textarea class="img-preview-caption" id="img-preview-caption" rows="2" data-str-placeholder="imgCaptionPlaceholder" data-str-label="imgCaptionLabel" hidden></textarea>
+                <div class="dm-input-wrap img-preview-caption-wrap" id="img-preview-caption-wrap" hidden>
+                    <textarea class="dm-input img-preview-caption" id="img-preview-caption" rows="1" data-str-placeholder="imgCaptionPlaceholder" data-str-label="imgCaptionLabel"></textarea>
+                    <button type="button" class="dm-emoji-btn" id="img-caption-emoji-btn" aria-label="Emojis" aria-expanded="false" aria-controls="emoji-picker"><i class="bi bi-emoji-smile"></i></button>
+                </div>
                 <div class="img-crop-presets" id="img-crop-presets" role="group" data-str-label="imgCropRatio" hidden></div>
                 <p class="img-preview-error" id="img-preview-error" role="alert"></p>
                 <div class="logout-confirm-actions" id="img-preview-actions">
@@ -216,6 +219,10 @@
       <button type="button" class="dm-lightbox-close" id="dm-lightbox-close" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>
       <button type="button" class="dm-lightbox-nav dm-lightbox-prev" id="dm-lightbox-prev" aria-label="Imagem anterior" hidden><i class="bi bi-chevron-left"></i></button>
       <button type="button" class="dm-lightbox-nav dm-lightbox-next" id="dm-lightbox-next" aria-label="Próxima imagem" hidden><i class="bi bi-chevron-right"></i></button>
+      <div class="dm-lightbox-head" id="dm-lightbox-head" hidden>
+        <div class="dm-lightbox-who"><span class="dm-lightbox-showname" id="dm-lightbox-showname"></span><span class="dm-lightbox-username" id="dm-lightbox-username"></span></div>
+        <div class="dm-lightbox-date" id="dm-lightbox-date"></div>
+      </div>
       <img id="dm-lightbox-img" alt="Imagem ampliada" />
       <div class="dm-lightbox-caption" id="dm-lightbox-caption" hidden></div>
       <div class="dm-lightbox-thumbs" id="dm-lightbox-thumbs"></div>
@@ -1022,6 +1029,10 @@ const dmLightboxPrev = document.getElementById("dm-lightbox-prev");
 const dmLightboxNext = document.getElementById("dm-lightbox-next");
 const dmLightboxThumbs = document.getElementById("dm-lightbox-thumbs");
 const dmLightboxCaption = document.getElementById("dm-lightbox-caption");
+const dmLightboxHead = document.getElementById("dm-lightbox-head");
+const dmLightboxShowname = document.getElementById("dm-lightbox-showname");
+const dmLightboxUsername = document.getElementById("dm-lightbox-username");
+const dmLightboxDate = document.getElementById("dm-lightbox-date");
 
 let lightboxImageIndex = -1;
 let lightboxImageSource = null;
@@ -1084,6 +1095,8 @@ const imgCropCanvas = document.getElementById("img-crop-canvas");
 const imgCropBox = document.getElementById("img-crop-box");
 const imgPreviewInfo = document.getElementById("img-preview-info");
 const imgPreviewCaption = document.getElementById("img-preview-caption");
+const imgPreviewCaptionWrap = document.getElementById("img-preview-caption-wrap");
+const imgCaptionEmojiBtn = document.getElementById("img-caption-emoji-btn");
 const imgCropPresets = document.getElementById("img-crop-presets");
 const imgPreviewError = document.getElementById("img-preview-error");
 const imgPreviewActions = document.getElementById("img-preview-actions");
@@ -2468,6 +2481,7 @@ function openEmojiPicker(anchor, mode, onPick, align = "end") {
   emojiPicker.hidden = false;
   positionPopover(emojiPicker, anchor, align);
   dmEmojiBtn.setAttribute("aria-expanded", String(mode === "compose"));
+  imgCaptionEmojiBtn.setAttribute("aria-expanded", String(mode === "caption"));
 }
 
 function closeEmojiPicker() {
@@ -2476,6 +2490,7 @@ function closeEmojiPicker() {
   emojiPickerMode = null;
   emojiPickerOnPick = null;
   dmEmojiBtn.setAttribute("aria-expanded", "false");
+  imgCaptionEmojiBtn.setAttribute("aria-expanded", "false");
 }
 
 emojiPickerGrid.addEventListener("click", (e) => {
@@ -2487,12 +2502,16 @@ emojiPickerGrid.addEventListener("click", (e) => {
   emojiPickerOnPick?.(emoji);
 });
 
+function insertEmojiInto(input, emoji) {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  input.setRangeText(emoji, start, end, "end");
+  input.focus();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 function insertEmojiIntoInput(emoji) {
-  const start = dmInput.selectionStart ?? dmInput.value.length;
-  const end = dmInput.selectionEnd ?? start;
-  dmInput.setRangeText(emoji, start, end, "end");
-  dmInput.focus();
-  dmInput.dispatchEvent(new Event("input", { bubbles: true }));
+  insertEmojiInto(dmInput, emoji);
 }
 
 dmEmojiBtn.addEventListener("click", (e) => {
@@ -2503,6 +2522,16 @@ dmEmojiBtn.addEventListener("click", (e) => {
     return;
   }
   openEmojiPicker(dmEmojiBtn, "compose", insertEmojiIntoInput);
+});
+
+imgCaptionEmojiBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (emojiPickerMode === "caption") {
+    closeEmojiPicker();
+    imgPreviewCaption.focus();
+    return;
+  }
+  openEmojiPicker(imgCaptionEmojiBtn, "caption", (emoji) => insertEmojiInto(imgPreviewCaption, emoji));
 });
 
 function myReaction(message) {
@@ -3017,16 +3046,49 @@ async function uploadAudioBase64(audioBase64, durationMs, mimeType) {
   await pollConversation();
 }
 
-/** Lightbox items { id, url, caption } of the open conversation (DM or room). */
+/** Lightbox items { id, url, caption, sender, createdAt } of the open conversation (DM or room). */
 function imageMessages() {
   if (currentRoom) {
     return roomMessages
       .filter(m => !m.deleted && m.mediaType?.startsWith("image/"))
-      .map(m => ({ id: m.id, url: roomImageUrl(m.id), caption: m.content || "" }));
+      .map(m => ({
+        id: m.id, url: roomImageUrl(m.id), caption: m.content || "", createdAt: m.createdAt,
+        sender: { showname: m.senderShowname || null, username: m.senderUsername || "", nameColor: m.senderNameColor || null },
+      }));
   }
   return messageList
     .filter(m => m.mediaType?.startsWith("image/"))
-    .map(m => ({ id: m.id, url: fileUrl(m.id), caption: m.content || "" }));
+    .map(dmLightboxItem);
+}
+
+/** A DM image (conversation or the contact panel's media list) as a lightbox item. */
+function dmLightboxItem(m) {
+  return { id: m.id, url: fileUrl(m.id), caption: m.content || "", createdAt: m.createdAt, sender: dmSender(m.senderId) };
+}
+
+function dmSender(senderId) {
+  const u = me && senderId === me.userId ? me : selectedUser;
+  if (!u) return null;
+  return { showname: u.showname || null, username: u.username || "", nameColor: nameColorOf(u.userId, u.nameColor) };
+}
+
+function lightboxDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "";
+  const day = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${day} às ${time}`;
+}
+
+function renderLightboxHead(item) {
+  const sender = item?.sender;
+  const date = lightboxDate(item?.createdAt);
+  dmLightboxHead.hidden = !sender && !date;
+  dmLightboxShowname.textContent = sender ? (sender.showname || sender.username) : "";
+  applyNameColor(dmLightboxShowname, sender?.nameColor);
+  dmLightboxUsername.textContent = sender?.username ? `@${sender.username}` : "";
+  dmLightboxUsername.hidden = !sender?.username || !sender.showname;
+  dmLightboxDate.textContent = date;
 }
 
 function currentLightboxImages() {
@@ -3051,6 +3113,7 @@ function closeLightbox() {
   dmLightbox.classList.remove("has-caption");
   dmLightboxCaption.hidden = true;
   dmLightboxCaption.textContent = "";
+  dmLightboxHead.hidden = true;
   delete dmLightboxImg.dataset.mediaUrl;
   dmLightboxImg.removeAttribute("src");
   dmLightboxThumbs.innerHTML = "";
@@ -3073,6 +3136,7 @@ function renderLightboxNav() {
   dmLightboxPrev.hidden = lightboxImageIndex <= 0;
   dmLightboxNext.hidden = lightboxImageIndex >= images.length - 1;
   renderLightboxCaption(images[lightboxImageIndex]);
+  renderLightboxHead(images[lightboxImageIndex]);
 }
 
 function renderLightboxCaption(item) {
@@ -3285,6 +3349,7 @@ function openImagePreview() {
   renderImagePreview();
   imgPreviewOverlay.hidden = false;
   imgPreview.hidden = false;
+  syncImageCaption();
   // With a mouse the caption takes the focus (Enter still sends); on touch the
   // keyboard would cover the preview, so the send button does.
   if (!avatar && window.matchMedia?.("(pointer: fine)").matches) imgPreviewCaption.focus();
@@ -3293,14 +3358,28 @@ function openImagePreview() {
 
 /** The caption field: images for a DM or a room only, hidden in crop mode. */
 function syncImageCaption() {
-  imgPreviewCaption.hidden = !imgItem || imgTarget?.kind === "avatar" || !!imgCrop;
+  imgPreviewCaptionWrap.hidden = !imgItem || imgTarget?.kind === "avatar" || !!imgCrop;
+  if (!imgPreviewCaptionWrap.hidden) autoResizeInput(imgPreviewCaption);
   // Same limit as a text message there: rooms 2000, DMs none.
   if (imgTarget?.kind === "room") imgPreviewCaption.maxLength = ROOM_MAX_LENGTH;
   else imgPreviewCaption.removeAttribute("maxlength");
 }
 
 imgPreviewCaption.addEventListener("input", () => {
+  autoResizeInput(imgPreviewCaption);
   if (imgItem) imgItem.caption = imgPreviewCaption.value;
+});
+
+// Like the composer: pasting images adds them to the queue.
+imgPreviewCaption.addEventListener("paste", (e) => {
+  const data = e.clipboardData;
+  const target = currentImageTarget();
+  if (!data || !target) return;
+  if (data.getData("text/plain").trim()) return;
+  const files = [...data.items].filter(i => i.kind === "file").map(i => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  queueImages(files, target);
 });
 
 function renderImagePreview() {
@@ -3329,6 +3408,7 @@ function renderImageSendButton(progress = null) {
   imgPreviewCancel.disabled = imgBusy;
   imgPreviewCrop.disabled = imgBusy;
   imgPreviewCaption.disabled = imgBusy;
+  imgCaptionEmojiBtn.disabled = imgBusy;
   imgPreviewSend.textContent = imgBusy
     ? fillString(STRINGS.imgSending, { p: Math.round((progress || 0) * 100) })
     : (avatar ? STRINGS.imgSave : STRINGS.imgSend);
@@ -3345,6 +3425,7 @@ function closeImagePreview({ all = false } = {}) {
   imgPreviewOverlay.hidden = true;
   imgPreviewImg.removeAttribute("src");
   imgPreviewCaption.value = "";
+  imgPreviewCaption.style.height = "";
   if (all) {
     imgBatchCaption = "";
     imgQueue = [];
@@ -3895,10 +3976,11 @@ async function postTyping(typing) {
   }
 }
 
-function autoResizeInput() {
-  if (!dmInput) return;
-  dmInput.style.height = "auto";
-  dmInput.style.height = dmInput.scrollHeight + "px";
+function autoResizeInput(input = dmInput) {
+  if (!input) return;
+  input.style.height = "auto";
+  // border-box: scrollHeight leaves out the borders, so add them back.
+  input.style.height = input.scrollHeight + input.offsetHeight - input.clientHeight + "px";
 }
 
 async function sendMessage() {
@@ -4548,7 +4630,7 @@ async function fetchMedia() {
 }
 
 function renderMedia(media) {
-  const images = media.filter(m => m.mediaType?.startsWith("image/")).map(m => ({ ...m, url: fileUrl(m.id) }));
+  const images = media.filter(m => m.mediaType?.startsWith("image/")).map(dmLightboxItem);
   const audios = media.filter(m => m.mediaType?.startsWith("audio/"));
   const videos = media.filter(m => m.mediaType?.startsWith("video/"));
 
@@ -7440,7 +7522,8 @@ for (const [name, btn] of Object.entries(ownerTabs)) btn.addEventListener("click
 // Close the emoji picker / reaction bar when clicking outside them.
 document.addEventListener("click", (e) => {
   if (!dmReactBar.hidden && !dmReactBar.contains(e.target)) closeReactBar();
-  if (!emojiPicker.hidden && !emojiPicker.contains(e.target) && !dmEmojiBtn.contains(e.target)) closeEmojiPicker();
+  if (!emojiPicker.hidden && !emojiPicker.contains(e.target) && !dmEmojiBtn.contains(e.target)
+      && !imgCaptionEmojiBtn.contains(e.target)) closeEmojiPicker();
   if (!roomModMenu.hidden && !roomModMenu.contains(e.target)) closeModMenu();
 });
 
@@ -7462,6 +7545,13 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   // Image preview: Enter sends (applies in crop mode), Escape cancels (leaves crop mode).
   if (!imgPreview.hidden) {
+    if (e.key === "Escape" && !emojiPicker.hidden) {
+      e.preventDefault();
+      const wasCaption = emojiPickerMode === "caption";
+      closeEmojiPicker();
+      if (wasCaption) imgPreviewCaption.focus();
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       if (imgBusy) return;

@@ -3627,33 +3627,13 @@ body {
   margin: 6px 4px 0;
 }
 
-/* Caption field in the image preview popup (the composer's look) */
-.img-preview-caption {
-  display: block;
+/* Caption field in the image preview popup: the composer itself (.dm-input-wrap / .dm-input), full width */
+.img-preview-caption-wrap {
+  flex: none;
   width: 100%;
-  box-sizing: border-box;
-  min-height: 44px;
-  max-height: 120px;
-  padding: 10px;
-  background: #0d0d0d;
-  border: 1px solid #444;
-  border-radius: 0;
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.95rem;
-  resize: none;
+  text-align: left;
 }
-.img-preview-caption:focus {
-  border-color: #ccc;
-  outline: none;
-}
-.img-preview-caption::placeholder {
-  color: #666;
-}
-.img-preview-caption:disabled {
-  opacity: 0.6;
-}
-.img-preview-caption[hidden] {
+.img-preview-caption-wrap[hidden] {
   display: none !important;
 }
 
@@ -3733,4 +3713,51 @@ body {
   .room-msg .dm-bubble.media {
     width: calc(100% - 104px);
   }
+}
+
+/* Lightbox head: who sent the image and when (top left) */
+.dm-lightbox-head {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 72px;
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.dm-lightbox-head[hidden] {
+  display: none !important;
+}
+.dm-lightbox-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.dm-lightbox-showname {
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dm-lightbox-username {
+  color: #aaa;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dm-lightbox-username[hidden] {
+  display: none !important;
+}
+.dm-lightbox-date {
+  color: #aaa;
+  font-size: 0.8rem;
 }
